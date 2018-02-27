@@ -16,7 +16,7 @@ class QNetwork():
 		# and optimizers here, initialize your variables, or alternately compile your model here.  
 		
 		# tf.reset_default_graph()
-		global train_op, W, output, features_, act, labels, loss
+		global train_op, W, output, features_, act, labels, loss, merged, writer
 
 		features_ = tf.placeholder(dtype = tf.float32, shape = [nS,1])
 		features = tf.reshape(features_,[1,nS])
@@ -26,25 +26,39 @@ class QNetwork():
 		
 		# W = tf.Variable(tf.random_uniform([nS,nA], 0, 0.01))
 		# output = tf.matmul(features, W)
+
+		####### Model #######
+		# TODO: CHECK THE MODEL SOMETHING PROBABLY WRONG!
+
 		# Input layer
 		input_layer = features # tf.reshape(features_, [-1, 1])
 
 		# Dense Layer
-		dense = tf.layers.dense(inputs = input_layer, units = nS, activation = None)
+		dense = tf.layers.dense(inputs = input_layer, units = nS, activation = None, name = 'dense')
 
-		output = tf.layers.dense(inputs = dense, units = nA)
+		# Output Layer
+		output = tf.layers.dense(inputs = dense, units = nA, name = 'output')
 		
-		predict = output[0, act]
-		predict = tf.reshape(predict, [1,1])
+		#####################
 
-		loss = tf.losses.mean_squared_error(labels = labels, predictions = predict, weights = 1.0)
-		# print(loss)
+		predict = output[0, act]
+		predict_ = tf.reshape(predict, [1,1])
+
+		loss = tf.losses.mean_squared_error(labels = labels, predictions = predict_, weights = 1.0)
+
 		# optimizer = tf.train.GradientDescentOptimizer(learning_rate = 0.0001)
 		optimizer = tf.train.AdamOptimizer(learning_rate = 0.0001)
 
 		train_op = optimizer.minimize(loss = loss, global_step = tf.train.get_global_step())
 		
-		writer = tf.summary.FileWriter("logs", sess.graph)
+		# TODO: NOT SURE IF THIS NEEDS TO BE EXPLICITLY SAVED OR NOT
+		# weights = tf.get_variable("dense/kernel")
+		self.saver = tf.train.Saver()
+		
+		tf.summary.scalar('loss', loss)
+		tf.summary.scalar('predict', predict)
+		writer = tf.summary.FileWriter("logs", sess.graph)	# After every episode
+		merged = tf.summary.merge_all()
 
 		return
 
@@ -63,8 +77,8 @@ class QNetwork():
 		# Helper function to save your model / weights. 
 
 		# save_path = saver.save(sess, "../save/model.ckpt")
-		checkpoint_path = os.path.join('../save/', 'model.ckpt')
-		saver.save(sess, checkpoint_path, global_step=epi_no)
+		checkpoint_path = os.path.join('./save/', 'model.ckpt')
+		self.saver.save(sess, checkpoint_path, global_step=epi_no)
 		print("model saved to {}".format(checkpoint_path))
 
 		return
@@ -130,7 +144,7 @@ class DQN_Agent():
 		self.replay_memory = Replay_Memory()
 
 		self.max_iterations = 200
-		self.max_episodes = 1000
+		self.max_episodes = 5000
 		self.epsilon = 0.5 
 
 		self.updateWeightIter = 100 # Another random number for now
@@ -177,25 +191,23 @@ class DQN_Agent():
 		# tf.reset_default_graph()
 
 		sess.run(tf.global_variables_initializer())
-		global train_op, W, output, features, act, labels, features_, loss
+		global train_op, W, output, features, act, labels, features_, loss, writer, merged
 
 		env = self.env
-		wCurrent = np.random.randn(self.nS, self.nA)
-		# wOld = wCurrent wOld = 
 		wIter = 0
 		updateWeightIter = self.updateWeightIter
 		gamma = self.gamma
 		alpha = self.alpha
 		steps_per_episode = []
 		qFunc_per_episode = []
-		# qFunc = np.dot(x, wCurrent)
 
 		for epi_no in range(self.max_episodes):
 			print('Episode Number: %d' % epi_no)
 			total_qFuncCurrent = 0
-
+			
+			# Random start-action pair right
 			currentState = env.reset()	# S
-			currentAction = env.action_space.sample() # A	# Random start-action pair right?
+			currentAction = env.action_space.sample() # A	
 			xCurrent = currentState
 			
 			nextState, reward, isTerminal, debugInfo = env.step(currentAction)				
@@ -205,13 +217,12 @@ class DQN_Agent():
 				print('Iteration Number: %d' % iter_no)
 				
 				if isTerminal:
-					qFuncCurrent = sess.run(output, feed_dict={features_:xCurrent})	#Instead of the line below, probably not needed though
 					target = reward
 					xCurrent = np.reshape(xCurrent, (self.nS,1))
 					target = np.reshape(target, (1,1))
 					# _, wCurrent, act_qFuncCurrent, loss_ = sess.run([train_op, W, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
-					_, act_qFuncCurrent, loss_ = sess.run([train_op, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
-					total_qFuncCurrent = total_qFuncCurrent + act_qFuncCurrent[0, currentAction]
+					_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target})
+					total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0, currentAction]
 					print('Q per episode: %f' % total_qFuncCurrent)
 					print('******* EPISODE TERMINATED *******')
 					steps_per_episode.append(iter_no)
@@ -222,17 +233,17 @@ class DQN_Agent():
 				xNext = np.reshape(xNext, (self.nS,1))
 				qFuncOld = sess.run(output, feed_dict={features_:xNext})
 				nextAction = self.epsilon_greedy_policy(qFuncOld, epi_no)
-				max_qFuncOld = qFuncOld[0, nextAction]	# max(Q(S', A', w-))
+				act_qFuncOld = qFuncOld[0, nextAction]	# max(Q(S', A', w-))
 
 				# qFuncCurrent = np.matmul(xCurrent, wCurrent)  # forward pass of the net with old weights with new nextState, new nextAction
 				# act_qFuncCurrent = qFuncCurrent[currentAction] # Q(S, A, w)
 
-				target = reward + gamma * max_qFuncOld # r + gamma*Q(S', A', w-)
+				target = reward + gamma * act_qFuncOld # r + gamma*Q(S', A', w-)
 				xCurrent = np.reshape(xCurrent, (self.nS,1))
 				target = np.reshape(target, (1,1))
 				# _, wCurrent, act_qFuncCurrent, loss_ = sess.run([train_op, W, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
-				_, act_qFuncCurrent, loss_ = sess.run([train_op, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
-				total_qFuncCurrent = total_qFuncCurrent + act_qFuncCurrent[0, currentAction]
+				_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target})
+				total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0, currentAction]
 				print('Loss: %f' % loss_)
 				xCurrent = xNext
 				currentAction = nextAction
@@ -248,15 +259,20 @@ class DQN_Agent():
 				####################################################################
 
 				wIter += 1
+
 				if self.render:
 					env.render()
 
-				################## Saving models ##################
+			################## Saving models ##################
 
-				# if (epi_no+1) % 500 == 0:
-				# 	self.net.save_model_weights(sess, epi_no)
+			if epi_no % 500 == 0:
+				self.net.save_model_weights(sess, epi_no)
 
-				###################################################
+			###################################################
+		
+			writer.add_summary(summary, iter_no + (epi_no * self.max_iterations))
+		
+		writer.close()
 
 		plt.figure(1)
 		plt.plot(steps_per_episode)
@@ -265,7 +281,7 @@ class DQN_Agent():
 		plt.plot(qFunc_per_episode)
 		
 		plt.show()
-		return wCurrent
+		return
 
 	def test(self, model_file=None):
 		# Evaluate the performance of your agent over 100 episodes, by calculating cummulative rewards for the 100 episodes.
