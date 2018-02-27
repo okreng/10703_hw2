@@ -11,31 +11,31 @@ class QNetwork():
 	# The network should take in state of the world as an input, 
 	# and output Q values of the actions available to the agent as the output. 
 
-	def __init__(self, environment_name, sess):
+	def __init__(self, environment_name, sess, nS, nA):
 		# Define your network architecture here. It is also a good idea to define any training operations 
 		# and optimizers here, initialize your variables, or alternately compile your model here.  
 		
 		# tf.reset_default_graph()
 		global train_op, W, output, features_, act, labels, loss
 
-		features_ = tf.placeholder(dtype = tf.float32, shape = [4,1])
-		features = tf.reshape(features_,[1,4])
+		features_ = tf.placeholder(dtype = tf.float32, shape = [nS,1])
+		features = tf.reshape(features_,[1,nS])
 		
 		act = tf.placeholder(dtype = tf.int32)
 		labels = tf.placeholder(dtype = tf.float32, shape = [1, 1])
 		
-		W = tf.Variable(tf.random_uniform([4,2], 0, 0.01))
-		output = tf.matmul(features, W)
+		# W = tf.Variable(tf.random_uniform([nS,nA], 0, 0.01))
+		# output = tf.matmul(features, W)
+		# Input layer
+		input_layer = features # tf.reshape(features_, [-1, 1])
+
+		# Dense Layer
+		dense = tf.layers.dense(inputs = input_layer, units = nS, activation = None)
+
+		output = tf.layers.dense(inputs = dense, units = nA)
+		
 		predict = output[0, act]
 		predict = tf.reshape(predict, [1,1])
-		# Input layer
-		# input_layer = tf.reshape(features, [-1, 1])
-
-		# #Dense Layer
-		# dense = tf.layers.dense(inputs = input_layer, units = 4, activation = None)
-
-		# output = tf.layers.dense(inputs = dense, units = 1)
-
 
 		loss = tf.losses.mean_squared_error(labels = labels, predictions = predict, weights = 1.0)
 		# print(loss)
@@ -117,45 +117,45 @@ class DQN_Agent():
 		
 		self.env = environment_name
 		self.render = render
-		self.net = QNetwork(self.env, sess)
+
+		# self.nS = 4	# For CartPole-v0
+		# self.nA = 2
+		# self.gamma = 0.99
+
+		self.nS = 2	# For MountainCar-v0
+		self.nA = 3
+		self.gamma = 1.0
+		
+		self.net = QNetwork(self.env, sess, self.nS, self.nA)
 		self.replay_memory = Replay_Memory()
-		self.max_iterations = 200 # Random number for now
-		self.max_episodes = 500 
-		self.epsilon = 0.5 # Another random number for now
+
+		self.max_iterations = 200
+		self.max_episodes = 1000
+		self.epsilon = 0.5 
+
 		self.updateWeightIter = 100 # Another random number for now
 
-		self.gamma = 0.99
 		self.alpha = 0.0001
-
-		self.nS = 4	# For CartPole-v0
-		self.nA = 2
-
-		# self.nS = 2	# For MountainCar-v0
-		# self.nA = 3
 
 		return
 
 	def epsilon_greedy_policy(self, q_values, epi_number):
 		# Creating epsilon greedy probabilities to sample from.
-		# observation, reward, done, info = env.step()
 		# epi_number: Episode number
+
 		prob = np.random.random_sample()	# Float in the range [0,1)
 		eps = self.epsilon
 		num_actions = self.nA 
 
 		eps = eps/((epi_number/(self.max_episodes/10)) + 1)
 		
-		if prob < eps:
-			nextAction = self.env.action_space.sample()	# How to set it for all states?
-		
-		else:
-			# values = np.zeros(env.nA)
-			# for action in range(num_actions):
-			# 	succ, reward, _, _ = env.step(action)
-			# 	x_succ = succ
-			# 	q_succ = reward + gamma * np.dot(x_succ, wCurrent)
-			# 	values[action] = q_succ
-			nextAction = np.argmax(q_values)			
+		nextAction = np.argmax(q_values)			
+
+		if prob < eps/num_actions:
+			while True:
+				nextAction_ = self.env.action_space.sample()
+				if nextAction_ != nextAction:
+					return nextAction_
 
 		return nextAction
 
@@ -180,8 +180,8 @@ class DQN_Agent():
 		global train_op, W, output, features, act, labels, features_, loss
 
 		env = self.env
-		wOld = wCurrent = np.random.randn(self.nS, self.nA)
-		# wOld = wCurrent
+		wCurrent = np.random.randn(self.nS, self.nA)
+		# wOld = wCurrent wOld = 
 		wIter = 0
 		updateWeightIter = self.updateWeightIter
 		gamma = self.gamma
@@ -205,14 +205,12 @@ class DQN_Agent():
 				print('Iteration Number: %d' % iter_no)
 				
 				if isTerminal:
-					# qFuncCurrent = sess.run(output, feed_dict={features:xCurrent})	#Instead of the line below, probably not needed though
-					# qFuncCurrent = np.matmul(xCurrent, wCurrent) # forward pass of the net with old weights with new nextState, new nextAction
-					# dw = np.matmul(np.subtract(reward, qFuncCurrent), xCurrent)
-					# wCurrent = np.add(np.dot(alpha, dw), wCurrent)
+					qFuncCurrent = sess.run(output, feed_dict={features_:xCurrent})	#Instead of the line below, probably not needed though
 					target = reward
 					xCurrent = np.reshape(xCurrent, (self.nS,1))
 					target = np.reshape(target, (1,1))
-					_, wCurrent, act_qFuncCurrent, loss_ = sess.run([train_op, W, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
+					# _, wCurrent, act_qFuncCurrent, loss_ = sess.run([train_op, W, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
+					_, act_qFuncCurrent, loss_ = sess.run([train_op, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
 					total_qFuncCurrent = total_qFuncCurrent + act_qFuncCurrent[0, currentAction]
 					print('Q per episode: %f' % total_qFuncCurrent)
 					print('******* EPISODE TERMINATED *******')
@@ -220,24 +218,20 @@ class DQN_Agent():
 					qFunc_per_episode.append(total_qFuncCurrent)
 					break
 
-				qFuncOld = np.matmul(xNext, wOld) # Q(S', A', w-) # forward pass of the net with current weights with nextState, nextAction
+				# qFuncOld = np.matmul(xNext, wOld) # Q(S', A', w-) # forward pass of the net with current weights with nextState, nextAction
+				xNext = np.reshape(xNext, (self.nS,1))
+				qFuncOld = sess.run(output, feed_dict={features_:xNext})
 				nextAction = self.epsilon_greedy_policy(qFuncOld, epi_no)
-				max_qFuncOld = qFuncOld[nextAction]	# max(Q(S', A', w-))
+				max_qFuncOld = qFuncOld[0, nextAction]	# max(Q(S', A', w-))
 
 				# qFuncCurrent = np.matmul(xCurrent, wCurrent)  # forward pass of the net with old weights with new nextState, new nextAction
 				# act_qFuncCurrent = qFuncCurrent[currentAction] # Q(S, A, w)
 
 				target = reward + gamma * max_qFuncOld # r + gamma*Q(S', A', w-)
-				# print(np.shape(target))
-				# print(np.shape(qFuncCurrent))
-				# print(np.shape(np.subtract(target, qFuncCurrent)))
-				# print(np.shape(xCurrent))
-				# nonsense = np.zeros((self.nS, self.nA))
 				xCurrent = np.reshape(xCurrent, (self.nS,1))
 				target = np.reshape(target, (1,1))
-				_, wCurrent, act_qFuncCurrent, loss_ = sess.run([train_op, W, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
-				# dw = np.dot(target - act_qFuncCurrent, nonsense)	# (target - Q(S, A, w)) * x
-				# wCurrent = np.add(np.dot(alpha, dw), wCurrent)	# w <- w + alpha*...
+				# _, wCurrent, act_qFuncCurrent, loss_ = sess.run([train_op, W, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
+				_, act_qFuncCurrent, loss_ = sess.run([train_op, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
 				total_qFuncCurrent = total_qFuncCurrent + act_qFuncCurrent[0, currentAction]
 				print('Loss: %f' % loss_)
 				xCurrent = xNext
@@ -245,17 +239,24 @@ class DQN_Agent():
 				nextState, reward, isTerminal, debugInfo = env.step(nextAction)				
 				xNext = nextState # generate feature space from new nextState
 
-				if wIter >= updateWeightIter:
-					wOld = wCurrent
-					wIter = 0
+				################## Holding target weights constant #################
+
+				# if wIter >= updateWeightIter:
+				# 	wOld = wCurrent
+				# 	wIter = 0
+
+				####################################################################
 
 				wIter += 1
 				if self.render:
 					env.render()
-					# time.sleep(1)
+
+				################## Saving models ##################
 
 				# if (epi_no+1) % 500 == 0:
 				# 	self.net.save_model_weights(sess, epi_no)
+
+				###################################################
 
 		plt.figure(1)
 		plt.plot(steps_per_episode)
@@ -305,8 +306,8 @@ def main(args):
 	output = tf.placeholder(dtype = tf.float32)
 	W = tf.placeholder(dtype = tf.float32)
 	loss = tf.placeholder(dtype = tf.float32)
-	features_ = tf.placeholder(dtype = tf.float32, shape = [4,1])	# CartPole-v0
-	# features_ = tf.placeholder(dtype = tf.float32, shape = [2,1]) 	# MountainCar-v0
+	# features_ = tf.placeholder(dtype = tf.float32, shape = [4,1])	# CartPole-v0
+	features_ = tf.placeholder(dtype = tf.float32, shape = [2,1]) 	# MountainCar-v0
 	# saver = tf.train.Saver(tf.global_variables())
 
 	# W = tf.Variable(tf.random_uniform([4,2], 0, 0.01))
