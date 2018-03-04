@@ -4,6 +4,7 @@ import random
 import time
 import matplotlib.pyplot as plt
 import os
+import time
 
 class QNetwork():
 
@@ -34,12 +35,16 @@ class QNetwork():
 		input_layer = features # tf.reshape(features_, [-1, 1])
 
 		# Dense Layer
-		dense = tf.layers.dense(inputs = input_layer, units = nS, activation = None, name = 'dense')
+		dense1 = tf.layers.dense(inputs = input_layer, units = 32, activation = tf.nn.relu, name = 'dense1', use_bias=True)
+		dense2 = tf.layers.dense(inputs = dense1, units = 32, activation = tf.nn.relu, name='dense2', use_bias=True)
+		dense3 = tf.layers.dense(inputs = dense2, units = 32, activation = tf.nn.relu, name='dense3', use_bias=True)
+		dense4 = tf.layers.dense(inputs=dense3, units=256, activation=tf.nn.relu, name='dense4', use_bias=True)
 
 		# Output Layer
-		output = tf.layers.dense(inputs = dense, units = nA, name = 'output')
+		output = tf.layers.dense(inputs = dense4, units = nA, name = 'output')
 		
 		#####################
+
 
 		predict = output[0, act]
 		predict_ = tf.reshape(predict, [1,1])
@@ -58,7 +63,9 @@ class QNetwork():
 		tf.summary.scalar('loss', loss)
 		tf.summary.scalar('predict', predict)
 		writer = tf.summary.FileWriter("logs", sess.graph)	# After every episode
+		# writer = tf.summary.FileWriter(".", sess.graph) #After every episode
 		merged = tf.summary.merge_all()
+		writer.add_graph(tf.get_default_graph())
 
 		return
 
@@ -85,10 +92,24 @@ class QNetwork():
 
 	def load_model(self, model_file):
 		# Helper function to load an existing model.
+
 		pass
 
-	def load_model_weights(self,weight_file):
-		# Helper funciton to load model weights. 
+	def load_model_weights(self,sess,weight_file=""):
+		# Helper funciton to load model weights.
+		#print(sess.graph.get_tensor_by_name('dense:0'))
+		#print(tf.get_default_graph())
+		saver = tf.train.import_meta_graph('./save/model.ckpt-0.meta')
+		global_step_tensor = graph.get_tensor_by_name('loss/global_step:0')
+
+		saver.restore(sess,tf.train.latest_checkpoint('./save/'))
+		sess.run(global_step_tensor)
+		#graph = tf.get_default_graph()
+		#dense1 = graph.get_operation_by_name("dense")
+		#feed_dict = {dense1}
+
+		#print('Weights loaded from latest checkpoint')
+		#return feed_dict
 		pass
 
 class Replay_Memory():
@@ -144,7 +165,7 @@ class DQN_Agent():
 		self.replay_memory = Replay_Memory()
 
 		self.max_iterations = 200
-		self.max_episodes = 5000
+		self.max_episodes = 3001
 		self.epsilon = 0.5 
 
 		self.updateWeightIter = 100 # Another random number for now
@@ -190,7 +211,16 @@ class DQN_Agent():
 
 		# tf.reset_default_graph()
 
-		sess.run(tf.global_variables_initializer())
+		#TODO : load last checkpoint as default, change this if want to start a new model
+		load_weights = False
+
+		if (not load_weights):
+			sess.run(tf.global_variables_initializer())
+		else:
+			#sess = tf.Session()
+			#load_dict = self.net.load_model_weights(sess)
+			#tf.train.init_from_checkpoint('./save/model-ckpt-4500')
+			sess.run(load_dict)
 		global train_op, W, output, features, act, labels, features_, loss, writer, merged
 
 		env = self.env
@@ -214,7 +244,7 @@ class DQN_Agent():
 			xNext = nextState # A' , generate feature space from nextState
 
 			for iter_no in range(self.max_iterations):
-				print('Iteration Number: %d' % iter_no)
+				# print('Iteration Number: %d' % iter_no)
 				
 				if isTerminal:
 					target = reward
@@ -223,8 +253,8 @@ class DQN_Agent():
 					# _, wCurrent, act_qFuncCurrent, loss_ = sess.run([train_op, W, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
 					_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target})
 					total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0, currentAction]
-					print('Q per episode: %f' % total_qFuncCurrent)
-					print('******* EPISODE TERMINATED *******')
+					# print('Q per episode: %f' % total_qFuncCurrent)
+					# print('******* EPISODE TERMINATED *******')
 					steps_per_episode.append(iter_no)
 					qFunc_per_episode.append(total_qFuncCurrent)
 					break
@@ -244,7 +274,7 @@ class DQN_Agent():
 				# _, wCurrent, act_qFuncCurrent, loss_ = sess.run([train_op, W, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
 				_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target})
 				total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0, currentAction]
-				print('Loss: %f' % loss_)
+				# print('Loss: %f' % loss_)
 				xCurrent = xNext
 				currentAction = nextAction
 				nextState, reward, isTerminal, debugInfo = env.step(nextAction)				
@@ -260,8 +290,9 @@ class DQN_Agent():
 
 				wIter += 1
 
-				if self.render:
+				if (self.render and epi_no % 100 == 0):
 					env.render()
+					time.sleep(0.001)
 
 			################## Saving models ##################
 
@@ -271,7 +302,9 @@ class DQN_Agent():
 			###################################################
 		
 			writer.add_summary(summary, iter_no + (epi_no * self.max_iterations))
-		
+			# writer.add_graph(tf.get_default_graph())
+
+		# input("Wait for tensorboard")
 		writer.close()
 
 		plt.figure(1)
@@ -304,8 +337,10 @@ def parse_arguments():
 def main(args):
 
 	args = parse_arguments()
-	environment_name = args.env
-	render = args.render
+	environment_name = 'MountainCar-v0'
+	#environment_name = args.env
+	# render = args.render
+	render = True
 
 	# Setting the session to allow growth, so it doesn't allocate all GPU memory. 
 	gpu_ops = tf.GPUOptions(allow_growth=True)
