@@ -16,13 +16,14 @@ class QNetwork():
 		# and optimizers here, initialize your variables, or alternately compile your model here.  
 		
 		# tf.reset_default_graph()
-		global train_op, W, output, features_, act, labels, loss, merged, writer
+		global train_op, W, output, features_, act, labels, loss, merged, writer, weights, loss_weights
 
 		features_ = tf.placeholder(dtype = tf.float32, shape = [nS,1])
 		features = tf.reshape(features_,[1,nS])
 		
 		act = tf.placeholder(dtype = tf.int32)
-		labels = tf.placeholder(dtype = tf.float32, shape = [1, 1])
+		labels = tf.placeholder(dtype = tf.float32, shape = [1, nA])
+		loss_weights = tf.placeholder(dtype = tf.float32, shape = [1, nA])
 		
 		# W = tf.Variable(tf.random_uniform([nS,nA], 0, 0.01))
 		# output = tf.matmul(features, W)
@@ -34,17 +35,22 @@ class QNetwork():
 		input_layer = features # tf.reshape(features_, [-1, 1])
 
 		# Dense Layer
-		dense = tf.layers.dense(inputs = input_layer, units = nS, activation = None, name = 'dense')
+		# dense = tf.layers.dense(inputs = input_layer, units = nS, activation = None, name = 'dense')
+		dense1 = tf.layers.dense(inputs = input_layer, units = 32, activation = tf.nn.relu, name = 'dense1', use_bias=True)
+		dense2 = tf.layers.dense(inputs = dense1, units = 32, activation = tf.nn.relu, name='dense2', use_bias=True)
+		dense3 = tf.layers.dense(inputs = dense2, units = 32, activation = tf.nn.relu, name='dense3', use_bias=True)
+		dense4 = tf.layers.dense(inputs=dense3, units=256, activation=tf.nn.relu, name='dense4', use_bias=True)
 
 		# Output Layer
-		output = tf.layers.dense(inputs = dense, units = nA, name = 'output')
+		output = tf.layers.dense(inputs = dense4, units = nA, name = 'output')
 		
 		#####################
 
-		predict = output[0, act]
-		predict_ = tf.reshape(predict, [1,1])
-
-		loss = tf.losses.mean_squared_error(labels = labels, predictions = predict_, weights = 1.0)
+		# predict = output[0, act]
+		# predict_ = tf.reshape(predict, [1,1])
+		# labels_ = output
+		# labels_[0, act] = labels
+		loss = tf.losses.mean_squared_error(labels=labels, predictions=output, weights=loss_weights)
 
 		# optimizer = tf.train.GradientDescentOptimizer(learning_rate = 0.0001)
 		optimizer = tf.train.AdamOptimizer(learning_rate = 0.0001)
@@ -52,11 +58,10 @@ class QNetwork():
 		train_op = optimizer.minimize(loss = loss, global_step = tf.train.get_global_step())
 		
 		# TODO: NOT SURE IF THIS NEEDS TO BE EXPLICITLY SAVED OR NOT
-		# weights = tf.get_variable("dense/kernel")
 		self.saver = tf.train.Saver()
 		
 		tf.summary.scalar('loss', loss)
-		tf.summary.scalar('predict', predict)
+		# tf.summary.scalar('output', output)
 		writer = tf.summary.FileWriter("logs", sess.graph)	# After every episode
 		merged = tf.summary.merge_all()
 
@@ -83,9 +88,20 @@ class QNetwork():
 
 		return
 
-	def load_model(self, model_file):
-		# Helper function to load an existing model.
-		pass
+	def load_model(self, sess, model_file):
+		# Helper function to load an existing model.m 
+
+		ckpt = tf.train.get_checkpoint_state('./save/')
+
+		if ckpt and ckpt.model_checkpoint_path:
+			print("Loading model: ", ckpt.all_model_checkpoint_paths[int(model_file/500) - 1])
+			self.saver.restore(sess, ckpt.all_model_checkpoint_paths[int(model_file/500) - 1])
+			# for v in tf.global_variables():
+			# 	print(v.name)
+		else:
+			print("Error in loading model: ", ckpt.model_checkpoint_path)
+
+		return
 
 	def load_model_weights(self,weight_file):
 		# Helper funciton to load model weights. 
@@ -191,7 +207,7 @@ class DQN_Agent():
 		# tf.reset_default_graph()
 
 		sess.run(tf.global_variables_initializer())
-		global train_op, W, output, features, act, labels, features_, loss, writer, merged
+		global train_op, W, output, features, act, labels, features_, loss, writer, merged, weights, loss_weights
 
 		env = self.env
 		wIter = 0
@@ -200,6 +216,12 @@ class DQN_Agent():
 		alpha = self.alpha
 		steps_per_episode = []
 		qFunc_per_episode = []
+
+		############################### LOAD MODEL ###########################
+
+		self.net.load_model(sess, 2500)
+
+		######################################################################
 
 		for epi_no in range(self.max_episodes):
 			print('Episode Number: %d' % epi_no)
@@ -218,12 +240,19 @@ class DQN_Agent():
 				
 				if isTerminal:
 					target = reward
+					target_ = np.zeros((self.nA, 1))
+					target_[currentAction,0] = target
+					loss_weights_ = np.zeros((self.nA, 1))
+					loss_weights_[currentAction,0] = 1.0
 					xCurrent = np.reshape(xCurrent, (self.nS,1))
-					target = np.reshape(target, (1,1))
+					target_ = np.reshape(target_, (1,self.nA))
+					loss_weights_ = np.reshape(loss_weights_, (1,self.nA))
+					# xCurrent = np.reshape(xCurrent, (self.nS,1))
+					# target = np.reshape(target, (1,1))
 					# _, wCurrent, act_qFuncCurrent, loss_ = sess.run([train_op, W, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
-					_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target})
+					_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
 					total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0, currentAction]
-					print('Q per episode: %f' % total_qFuncCurrent)
+					# print('Q per episode: %f' % total_qFuncCurrent)
 					print('******* EPISODE TERMINATED *******')
 					steps_per_episode.append(iter_no)
 					qFunc_per_episode.append(total_qFuncCurrent)
@@ -239,12 +268,22 @@ class DQN_Agent():
 				# act_qFuncCurrent = qFuncCurrent[currentAction] # Q(S, A, w)
 
 				target = reward + gamma * act_qFuncOld # r + gamma*Q(S', A', w-)
+				target_ = np.zeros((self.nA, 1))
+				target_[currentAction,0] = target
+				loss_weights_ = np.zeros((self.nA, 1))
+				loss_weights_[currentAction,0] = 1.0
 				xCurrent = np.reshape(xCurrent, (self.nS,1))
-				target = np.reshape(target, (1,1))
+				target_ = np.reshape(target_, (1,self.nA))
+				loss_weights_ = np.reshape(loss_weights_, (1,self.nA))
 				# _, wCurrent, act_qFuncCurrent, loss_ = sess.run([train_op, W, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
-				_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target})
+				_, qFuncCurrent, loss_, summary, = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
+				
+				# with tf.variable_scope("foo", reuse = tf.AUTO_REUSE):
+				# 	weights = tf.get_variable("output/kernel:0", [2,3])
+				# print(tf.trainable_variables())
+				# weights = [v for v in tf.trainable_variables() if v.name == "output/kernel:0"]
 				total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0, currentAction]
-				print('Loss: %f' % loss_)
+				# print('Loss: %f' % loss_)
 				xCurrent = xNext
 				currentAction = nextAction
 				nextState, reward, isTerminal, debugInfo = env.step(nextAction)				
@@ -305,7 +344,7 @@ def main(args):
 
 	args = parse_arguments()
 	environment_name = args.env
-	render = args.render
+	render = False # args.render
 
 	# Setting the session to allow growth, so it doesn't allocate all GPU memory. 
 	gpu_ops = tf.GPUOptions(allow_growth=True)
