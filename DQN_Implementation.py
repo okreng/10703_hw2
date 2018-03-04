@@ -368,7 +368,91 @@ class DQN_Agent():
 	def test(self, model_file=None):
 		# Evaluate the performance of your agent over 100 episodes, by calculating cummulative rewards for the 100 episodes.
 		# Here you need to interact with the environment, irrespective of whether you are using a memory. 
-		pass
+		
+		sess.run(tf.global_variables_initializer())
+		global train_op, W, output, features, act, labels, features_, loss, writer, merged, weights, loss_weights
+
+		env = self.env
+		wIter = 0
+		updateWeightIter = self.updateWeightIter
+		gamma = self.gamma
+		alpha = self.alpha
+		steps_per_episode = []
+		qFunc_per_episode = []
+
+		############################### LOAD MODEL ###########################
+
+		# self.net.load_model(sess, 2500)
+
+		######################################################################
+
+		for epi_no in range(100):
+			print('Episode Number: %d' % epi_no)
+			total_qFuncCurrent = 0
+			
+			# Random start-action pair right
+			currentState = env.reset()	# S
+			currentAction = env.action_space.sample() # A	
+			xCurrent = currentState
+			
+			nextState, reward, isTerminal, debugInfo = env.step(currentAction)				
+			xNext = nextState # A' , generate feature space from nextState
+
+			for iter_no in range(self.max_iterations):
+				print('Iteration Number: %d' % iter_no)
+				
+				if isTerminal:
+					target = reward
+					xCurrent = np.reshape(xCurrent, (self.nS,1))
+					target = np.reshape(target, (1,1))
+					_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target})
+					total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0, currentAction]
+					# print('Q per episode: %f' % total_qFuncCurrent)
+					print('******* EPISODE TERMINATED *******')
+					steps_per_episode.append(iter_no)
+					qFunc_per_episode.append(total_qFuncCurrent)
+					break
+
+				xNext = np.reshape(xNext, (self.nS,1))
+				qFuncOld = sess.run(output, feed_dict={features_:xNext})
+				nextAction = self.epsilon_greedy_policy(qFuncOld, epi_no)
+				act_qFuncOld = qFuncOld[0, nextAction]	# max(Q(S', A', w-))
+
+				target = reward + gamma * act_qFuncOld # r + gamma*Q(S', A', w-)
+				xCurrent = np.reshape(xCurrent, (self.nS,1))
+				target = np.reshape(target, (1,1))
+				W, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
+				_, qFuncCurrent, loss_, summary, = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target})
+				
+				total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0, currentAction]
+				# print('Loss: %f' % loss_)
+				xCurrent = xNext
+				currentAction = nextAction
+				nextState, reward, isTerminal, debugInfo = env.step(nextAction)				
+				xNext = nextState # generate feature space from new nextState
+
+				if self.render:
+					env.render()
+
+			################## Saving models ##################
+
+			if epi_no % 500 == 0:
+				self.net.save_model_weights(sess, epi_no)
+
+			###################################################
+		
+			writer.add_summary(summary, iter_no + (epi_no * self.max_iterations))
+		
+		writer.close()
+
+		plt.figure(1)
+		plt.plot(steps_per_episode)
+		
+		plt.figure(2)
+		plt.plot(qFunc_per_episode)
+		
+		plt.show()
+		return
 
 	def burn_in_memory():
 		# Initialize your replay memory with a burn_in number of episodes / transitions. 
