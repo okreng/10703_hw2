@@ -199,7 +199,7 @@ class DQN_Agent():
 		
 		nextAction = np.argmax(q_values)			
 
-		return nextAction 
+		return nextAction
 
 	def train(self, sess):
 		# In this function, we will train our network. 
@@ -210,6 +210,9 @@ class DQN_Agent():
 		# transitions to memory, while also updating your model.
 
 		# tf.reset_default_graph()
+
+		# TODO: Set this value to True if using experience replay
+		exp_replay = True
 
 		sess.run(tf.global_variables_initializer())
 		global train_op, W, output, features, act, labels, features_, loss, writer, merged, weights, loss_weights
@@ -244,7 +247,7 @@ class DQN_Agent():
 				print('Iteration Number: %d' % iter_no)
 				
 				if isTerminal:
-					target = reward
+
 					# target_ = np.zeros((self.nA, 1))
 					# target_[currentAction,0] = target
 					# loss_weights_ = np.zeros((self.nA, 1))
@@ -253,6 +256,7 @@ class DQN_Agent():
 					# target_ = np.reshape(target_, (1,self.nA))
 					# loss_weights_ = np.reshape(loss_weights_, (1,self.nA))
 					xCurrent = np.reshape(xCurrent, (self.nS,1))
+					target = reward
 					target = np.reshape(target, (1,1))
 					# _, wCurrent, act_qFuncCurrent, loss_ = sess.run([train_op, W, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
 					_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target})
@@ -293,6 +297,27 @@ class DQN_Agent():
 				currentAction = nextAction
 				nextState, reward, isTerminal, debugInfo = env.step(nextAction)				
 				xNext = nextState # generate feature space from new nextState
+
+				# Perform updates in the case of experience replay
+				if exp_replay:
+					batches = 32
+					batch_list = self.replay_memory.sample_batch(batches)
+					for batch in range(batches):
+						term_batch = batch_list[batch][4]
+						a_batch = batch_list[batch][1]
+						x_batch = batch_list[batch][0]
+						xp_batch = batch_list[batch][3]
+						if (term_batch):
+							r_targ = batch_list[batch][2]
+						else:
+							qFuncBatch = sess.run(output, feed_dict={features_: xp_batch})
+							a_prime = self.epsilon_greedy_policy(qFuncBatch, epi_no)
+							out_prime = sess.run(output, feed_dict={features_: xp_batch, act: a_prime})
+							r_targ = batch_list[batch][2] + gamma * out_prime[0, a_prime]
+						_, qFuncCurrent, loss_, _ = sess.run([train_op, output, loss, merged],
+						                                     feed_dict={features_: x_batch, act: a_batch,
+						                                                labels: r_targ})
+					break
 
 				# Appending to replay memory
 
