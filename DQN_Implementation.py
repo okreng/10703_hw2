@@ -11,7 +11,7 @@ class QNetwork():
 	# The network should take in state of the world as an input, 
 	# and output Q values of the actions available to the agent as the output. 
 
-	def __init__(self, environment_name, sess, nS, nA):
+	def __init__(self, environment_name, sess, nS, nA, batch_size=32):
 		# Define your network architecture here. It is also a good idea to define any training operations 
 		# and optimizers here, initialize your variables, or alternately compile your model here.  
 		
@@ -118,7 +118,7 @@ class Replay_Memory():
 		# randomly initialized agent. Memory size is the maximum size after which old elements in the memory are replaced. 
 		# A simple (if not the most efficient) was to implement the memory is as a list of transitions. 
 		
-		memory = []
+		self.memory = []
 		self.memory_size = memory_size
 		self.burn_in = burn_in
 
@@ -127,11 +127,18 @@ class Replay_Memory():
 	def sample_batch(self, batch_size=32):
 		# This function returns a batch of randomly sampled transitions - i.e. state, action, reward, next state, terminal flag tuples. 
 		# You will feed this to your model to train.
-		pass
+
+		samples = random.sample(range(1,len(self.memory)), 32);
+		sample_batch = [self.memory[s] for s in samples];
+
+		return sample_batch
 
 	def append(self, transition):
-		# Appends transition to the memory. 	
-		pass
+		# Appends transition to the memory. 
+
+		self.memory.append(transition)
+
+		return
 
 class DQN_Agent():
 
@@ -162,7 +169,10 @@ class DQN_Agent():
 		self.gamma = 1.0
 		
 		self.net = QNetwork(self.env, sess, self.nS, self.nA)
-		self.replay_memory = Replay_Memory()
+
+		self.burn_in_memory = 10000
+		self.memory_size = 50000
+		self.replay_memory = Replay_Memory(self.memory_size, self.burn_in_memory)
 
 		self.max_iterations = 200
 		self.max_episodes = 3000
@@ -224,6 +234,29 @@ class DQN_Agent():
 		alpha = self.alpha
 		steps_per_episode = []
 		qFunc_per_episode = []
+
+		############################### BURN IN ###########################
+
+		xCurrent = env.reset()	# S
+		currentAction = env.action_space.sample() # A
+		xNext, reward, isTerminal, _ = env.step(currentAction)
+
+		for i in range(self.burn_in_memory):
+			xNext = np.reshape(xNext, (self.nS,1))
+			qFunc = sess.run(output, feed_dict={features_:xNext})
+			nextAction = self.epsilon_greedy_policy(qFunc, 0)  # Want to maximize exploration, don't decay epsilon
+
+			transition = [xCurrent, currentAction, reward, xNext, isTerminal]
+			self.replay_memory.append(transition)
+
+			if isTerminal:
+				xCurrent = env.reset()
+				currentAction = env.action_space.sample()
+				xNext, reward, isTerminal, _ = env.step(currentAction)	
+
+			else:
+				xCurrent = xNext
+				xNext, reward, isTerminal, _ = env.step(nextAction)	
 
 		############################### LOAD MODEL ###########################
 
