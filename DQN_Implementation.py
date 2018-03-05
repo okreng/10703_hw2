@@ -36,13 +36,13 @@ class QNetwork():
 
 		# Dense Layer
 		# dense = tf.layers.dense(inputs = input_layer, units = nS, activation = None, name = 'dense')
-		dense1 = tf.layers.dense(inputs = input_layer, units = 32, activation = tf.nn.relu, name = 'dense1', use_bias=True)
-		dense2 = tf.layers.dense(inputs = dense1, units = 32, activation = tf.nn.relu, name='dense2', use_bias=True)
-		dense3 = tf.layers.dense(inputs = dense2, units = 32, activation = tf.nn.relu, name='dense3', use_bias=True)
-		dense4 = tf.layers.dense(inputs=dense3, units=256, activation=tf.nn.relu, name='dense4', use_bias=True)
+		dense1 = tf.layers.dense(inputs = input_layer, units = 16, activation = tf.nn.relu, name = 'dense1', use_bias=True)
+		dense2 = tf.layers.dense(inputs = dense1, units = 16, activation = tf.nn.relu, name='dense2', use_bias=True)
+		# dense3 = tf.layers.dense(inputs = dense2, units = 32, activation = tf.nn.relu, name='dense3', use_bias=True)
+		# dense4 = tf.layers.dense(inputs=dense3, units=256, activation=tf.nn.relu, name='dense4', use_bias=True)
 
 		# Output Layer
-		output = tf.layers.dense(inputs = dense4, units = nA, name = 'output')
+		output = tf.layers.dense(inputs = dense2, units = nA, name = 'output')
 		
 		#####################
 
