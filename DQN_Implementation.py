@@ -144,7 +144,7 @@ class Replay_Memory():
 		return self.memory
 
 	def pop_(self):
-		self.memory.pop()
+		self.memory.pop(0)
 		return
 
 class DQN_Agent():
