@@ -94,12 +94,13 @@ class QNetwork():
 		ckpt = tf.train.get_checkpoint_state('./save/')
 
 		if ckpt and ckpt.model_checkpoint_path:
-			print("Loading model: ", ckpt.all_model_checkpoint_paths[int(model_file/500) - 1])
-			self.saver.restore(sess, ckpt.all_model_checkpoint_paths[int(model_file/500) - 1])
+			print("Loading model: ", ckpt.all_model_checkpoint_paths[int(model_file/500)])
+			self.saver.restore(sess, ckpt.all_model_checkpoint_paths[int(model_file/500)])
 			# for v in tf.global_variables():
 			# 	print(v.name)
 		else:
 			print("Error in loading model: ", ckpt.model_checkpoint_path)
+
 
 		return
 
@@ -117,16 +118,33 @@ class Replay_Memory():
 		# Burn in episodes define the number of episodes that are written into the memory from the 
 		# randomly initialized agent. Memory size is the maximum size after which old elements in the memory are replaced. 
 		# A simple (if not the most efficient) was to implement the memory is as a list of transitions. 
-		pass
+		self.memory = []
+		self.memory_size = memory_size
+		self.burn_in = burn_in
+
+		return
 
 	def sample_batch(self, batch_size=32):
 		# This function returns a batch of randomly sampled transitions - i.e. state, action, reward, next state, terminal flag tuples. 
 		# You will feed this to your model to train.
-		pass
+		samples = random.sample(range(1,len(self.memory)), 32)
+		sample_batch = [self.memory[s] for s in samples]
+
+		return sample_batch
 
 	def append(self, transition):
-		# Appends transition to the memory. 	
-		pass
+		# Appends transition to the memory. 
+
+		self.memory.append(transition)
+
+		return
+
+	def get_memory(self):
+		return self.memory
+
+	def pop_(self):
+		self.memory.pop(0)
+		return
 
 class DQN_Agent():
 
@@ -148,19 +166,21 @@ class DQN_Agent():
 		self.env = environment_name
 		self.render = render
 
-		# self.nS = 4	# For CartPole-v0
-		# self.nA = 2
-		# self.gamma = 0.99
+		self.nS = 4	# For CartPole-v0
+		self.nA = 2
+		self.gamma = 0.99
 
-		self.nS = 2	# For MountainCar-v0
-		self.nA = 3
-		self.gamma = 1.0
+		# self.nS = 2	# For MountainCar-v0
+		# self.nA = 3
+		# self.gamma = 1.0
 		
 		self.net = QNetwork(self.env, sess, self.nS, self.nA)
-		self.replay_memory = Replay_Memory()
+		self.burn_size = 30000
+		self.memory_size = 50000
+		self.replay_memory = Replay_Memory(self.memory_size, self.burn_size)
 
 		self.max_iterations = 200
-		self.max_episodes = 5000
+		self.max_episodes = 10001
 		self.epsilon = 0.5 
 
 		self.updateWeightIter = 100 # Another random number for now
@@ -173,11 +193,14 @@ class DQN_Agent():
 		# Creating epsilon greedy probabilities to sample from.
 		# epi_number: Episode number
 
-		prob = np.random.random_sample()	# Float in the range [0,1)
+		prob = np.random.random_sample()  # Float in the range [0,1)
 		eps = self.epsilon
 		num_actions = self.nA 
 
-		eps = eps/((epi_number/(self.max_episodes/10)) + 1)
+		if epi_number < self.max_episodes/2:
+			eps = eps/((epi_number/(self.max_episodes/10)) + 1)
+		else:
+			eps = 0
 		
 		nextAction = np.argmax(q_values)			
 
@@ -208,7 +231,7 @@ class DQN_Agent():
 
 		sess.run(tf.global_variables_initializer())
 		global train_op, W, output, features, act, labels, features_, loss, writer, merged, weights, loss_weights
-
+		exp_replay = True
 		env = self.env
 		wIter = 0
 		updateWeightIter = self.updateWeightIter
@@ -217,14 +240,17 @@ class DQN_Agent():
 		steps_per_episode = []
 		qFunc_per_episode = []
 
+		# Burn in memory
+		self.burn_in_memory(sess)
+		
 		############################### LOAD MODEL ###########################
 
-		self.net.load_model(sess, 2500)
+		# self.net.load_model(sess, 2500)
 
 		######################################################################
 
 		for epi_no in range(self.max_episodes):
-			print('Episode Number: %d' % epi_no)
+			# print('Episode Number: %d' % epi_no)
 			total_qFuncCurrent = 0
 			
 			# Random start-action pair right
@@ -236,7 +262,7 @@ class DQN_Agent():
 			xNext = nextState # A' , generate feature space from nextState
 
 			for iter_no in range(self.max_iterations):
-				print('Iteration Number: %d' % iter_no)
+				# print('Iteration Number: %d' % iter_no)
 				
 				if isTerminal:
 					target = reward
@@ -253,7 +279,8 @@ class DQN_Agent():
 					_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
 					total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0, currentAction]
 					# print('Q per episode: %f' % total_qFuncCurrent)
-					print('******* EPISODE TERMINATED *******')
+					# print('******* EPISODE TERMINATED *******')
+					print("episode: {}/{}, score: {}".format(epi_no, self.max_episodes, iter_no))
 					steps_per_episode.append(iter_no)
 					qFunc_per_episode.append(total_qFuncCurrent)
 					break
@@ -284,10 +311,46 @@ class DQN_Agent():
 				# weights = [v for v in tf.trainable_variables() if v.name == "output/kernel:0"]
 				total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0, currentAction]
 				# print('Loss: %f' % loss_)
+				transition = [xCurrent, currentAction, reward, xNext, isTerminal]
 				xCurrent = xNext
 				currentAction = nextAction
 				nextState, reward, isTerminal, debugInfo = env.step(nextAction)				
 				xNext = nextState # generate feature space from new nextState
+
+				if exp_replay:
+					batches = 32
+					batch_list = self.replay_memory.sample_batch(batches)
+					for batch in range(batches):
+						term_batch = batch_list[batch][4]
+						a_batch = batch_list[batch][1]
+						x_batch = batch_list[batch][0]
+						x_batch = np.reshape(x_batch,(self.nS,1))
+						xp_batch = batch_list[batch][3]
+						xp_batch = np.reshape(xp_batch,(self.nS,1))
+
+						if (term_batch):
+							r_targ = batch_list[batch][2]
+
+						else:
+							qFuncBatch = sess.run(output, feed_dict={features_: xp_batch})
+							a_prime = self.epsilon_greedy_policy(qFuncBatch, epi_no)
+							out_prime = sess.run(output, feed_dict={features_: xp_batch, act: a_prime})
+							r_targ = batch_list[batch][2] + gamma * out_prime[0, a_prime]
+						
+						r_targ = np.reshape(r_targ, (1,1))
+						target_ = np.zeros((self.nA, 1))
+						target_[a_batch,0] = r_targ
+						loss_weights_ = np.zeros((self.nA, 1))
+						loss_weights_[a_batch,0] = 1.0
+						target_ = np.reshape(target_, (1,self.nA))
+						loss_weights_ = np.reshape(loss_weights_, (1,self.nA))
+						_, qFuncCurrent, loss_, _ = sess.run([train_op, output, loss, merged], feed_dict={features_: x_batch, act: a_batch, labels:target_, loss_weights:loss_weights_})
+
+				# Appending to replay memory
+				if len(self.replay_memory.get_memory()) == self.memory_size:
+					self.replay_memory.pop_()
+
+				self.replay_memory.append(transition)
 
 				################## Holding target weights constant #################
 
@@ -327,10 +390,34 @@ class DQN_Agent():
 		# Here you need to interact with the environment, irrespective of whether you are using a memory. 
 		pass
 
-	def burn_in_memory():
+	def burn_in_memory(self, sess):
 		# Initialize your replay memory with a burn_in number of episodes / transitions. 
 
-		pass
+		env = self.env
+		
+		xCurrent = env.reset()  # S
+		currentAction = env.action_space.sample()  # A
+		xNext, reward, isTerminal, _ = env.step(currentAction)
+
+		for i in range(self.burn_size):
+			xNext = np.reshape(xNext, (self.nS,1))
+			qFunc = sess.run(output, feed_dict={features_:xNext})
+			nextAction = self.epsilon_greedy_policy(qFunc, 0)  # Want to maximize exploration, don't decay epsilon
+
+			transition = [xCurrent, currentAction, reward, xNext, isTerminal]
+			self.replay_memory.append(transition)
+
+			if isTerminal:
+				xCurrent = env.reset()
+				currentAction = env.action_space.sample()
+				xNext, reward, isTerminal, _ = env.step(currentAction)
+				# reward = reward + 10
+
+			else:
+				xCurrent = xNext
+				xNext, reward, isTerminal, _ = env.step(nextAction)	
+		print('Completed burning in memory')
+		return
 
 def parse_arguments():
 	parser = argparse.ArgumentParser(description='Deep Q Network Argument Parser')
