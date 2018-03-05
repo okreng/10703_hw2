@@ -140,6 +140,13 @@ class Replay_Memory():
 
 		return
 
+	def get_memory(self):
+		return self.memory
+
+	def pop_(self):
+		self.memory.pop()
+		return
+
 class DQN_Agent():
 
 	# In this class, we will implement functions to do the following. 
@@ -170,9 +177,9 @@ class DQN_Agent():
 		
 		self.net = QNetwork(self.env, sess, self.nS, self.nA)
 
-		self.burn_in_memory = 10000
-		self.memory_size = 50000
-		self.replay_memory = Replay_Memory(self.memory_size, self.burn_in_memory)
+		self.burn_size = 10000
+		self.memory_size = 10001
+		self.replay_memory = Replay_Memory(self.memory_size, self.burn_size)
 
 		self.max_iterations = 200
 		self.max_episodes = 3000
@@ -235,29 +242,9 @@ class DQN_Agent():
 		steps_per_episode = []
 		qFunc_per_episode = []
 
-		############################### BURN IN ###########################
-
-		xCurrent = env.reset()	# S
-		currentAction = env.action_space.sample() # A
-		xNext, reward, isTerminal, _ = env.step(currentAction)
-
-		for i in range(self.burn_in_memory):
-			xNext = np.reshape(xNext, (self.nS,1))
-			qFunc = sess.run(output, feed_dict={features_:xNext})
-			nextAction = self.epsilon_greedy_policy(qFunc, 0)  # Want to maximize exploration, don't decay epsilon
-
-			transition = [xCurrent, currentAction, reward, xNext, isTerminal]
-			self.replay_memory.append(transition)
-
-			if isTerminal:
-				xCurrent = env.reset()
-				currentAction = env.action_space.sample()
-				xNext, reward, isTerminal, _ = env.step(currentAction)	
-
-			else:
-				xCurrent = xNext
-				xNext, reward, isTerminal, _ = env.step(nextAction)	
-
+		# Burn in memory
+		self.burn_in_memory(sess)
+		
 		############################### LOAD MODEL ###########################
 
 		# self.net.load_model(sess, 2500)
@@ -275,6 +262,8 @@ class DQN_Agent():
 			
 			nextState, reward, isTerminal, debugInfo = env.step(currentAction)				
 			xNext = nextState # A' , generate feature space from nextState
+			
+			tf.summary.scalar('qFunc_per_episode', tf.convert_to_tensor(qFunc_per_episode))
 
 			for iter_no in range(self.max_iterations):
 				print('Iteration Number: %d' % iter_no)
@@ -326,6 +315,7 @@ class DQN_Agent():
 				# weights = [v for v in tf.trainable_variables() if v.name == "output/kernel:0"]
 				total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0, currentAction]
 				# print('Loss: %f' % loss_)
+				transition = [xCurrent, currentAction, reward, xNext, isTerminal]
 				xCurrent = xNext
 				currentAction = nextAction
 				nextState, reward, isTerminal, debugInfo = env.step(nextAction)				
@@ -339,33 +329,37 @@ class DQN_Agent():
 						term_batch = batch_list[batch][4]
 						a_batch = batch_list[batch][1]
 						x_batch = batch_list[batch][0]
+						x_batch = np.reshape(x_batch,(self.nS,1))
 						xp_batch = batch_list[batch][3]
+						xp_batch = np.reshape(xp_batch,(self.nS,1))
+
 						if (term_batch):
 							r_targ = batch_list[batch][2]
+
 						else:
 							qFuncBatch = sess.run(output, feed_dict={features_: xp_batch})
 							a_prime = self.epsilon_greedy_policy(qFuncBatch, epi_no)
 							out_prime = sess.run(output, feed_dict={features_: xp_batch, act: a_prime})
 							r_targ = batch_list[batch][2] + gamma * out_prime[0, a_prime]
-						_, qFuncCurrent, loss_, _ = sess.run([train_op, output, loss, merged],
-						                                     feed_dict={features_: x_batch, act: a_batch,
-						                                                labels: r_targ})
-					break
+						
+						r_targ = np.reshape(r_targ, (1,1))
+						_, qFuncCurrent, loss_, _ = sess.run([train_op, output, loss, merged], feed_dict={features_: x_batch, act: a_batch, labels: r_targ})
 
 				# Appending to replay memory
+				if len(self.replay_memory.get_memory()) == self.memory_size:
+					self.replay_memory.pop_()
 
-				# transition = [xCurrent, ]
-				# self.replay_memory.append()
+				self.replay_memory.append(transition)
 
 				################## Holding target weights constant #################
 
 				# if wIter >= updateWeightIter:
 				# 	wOld = wCurrent
 				# 	wIter = 0
+				
+				# wIter += 1
 
 				####################################################################
-
-				wIter += 1
 
 				if self.render:
 					env.render()
@@ -390,7 +384,7 @@ class DQN_Agent():
 		plt.show()
 		return
 
-	def test(self, model_file=None):
+	def test(self, sess, model_file=None):
 		# Evaluate the performance of your agent over 100 episodes, by calculating cummulative rewards for the 100 episodes.
 		# Here you need to interact with the environment, irrespective of whether you are using a memory. 
 		
@@ -446,7 +440,6 @@ class DQN_Agent():
 				target = reward + gamma * act_qFuncOld # r + gamma*Q(S', A', w-)
 				xCurrent = np.reshape(xCurrent, (self.nS,1))
 				target = np.reshape(target, (1,1))
-				W, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
 				_, qFuncCurrent, loss_, summary, = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target})
 				
 				total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0, currentAction]
@@ -479,10 +472,32 @@ class DQN_Agent():
 		plt.show()
 		return
 
-	def burn_in_memory():
+	def burn_in_memory(self, sess):
 		# Initialize your replay memory with a burn_in number of episodes / transitions. 
+		env = self.env
+		
+		xCurrent = env.reset()  # S
+		currentAction = env.action_space.sample()  # A
+		xNext, reward, isTerminal, _ = env.step(currentAction)
 
-		pass
+		for i in range(self.burn_size):
+			xNext = np.reshape(xNext, (self.nS,1))
+			qFunc = sess.run(output, feed_dict={features_:xNext})
+			nextAction = self.epsilon_greedy_policy(qFunc, 0)  # Want to maximize exploration, don't decay epsilon
+
+			transition = [xCurrent, currentAction, reward, xNext, isTerminal]
+			self.replay_memory.append(transition)
+
+			if isTerminal:
+				xCurrent = env.reset()
+				currentAction = env.action_space.sample()
+				xNext, reward, isTerminal, _ = env.step(currentAction)	
+
+			else:
+				xCurrent = xNext
+				xNext, reward, isTerminal, _ = env.step(nextAction)	
+		print('Completed burning in memory')
+		return
 
 def parse_arguments():
 	parser = argparse.ArgumentParser(description='Deep Q Network Argument Parser')
