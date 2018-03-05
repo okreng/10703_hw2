@@ -38,7 +38,7 @@ class QNetwork():
 		# dense = tf.layers.dense(inputs = input_layer, units = nS, activation = None, name = 'dense')
 		dense1 = tf.layers.dense(inputs = input_layer, units = 16, activation = tf.nn.relu, name = 'dense1', use_bias=True)
 		dense2 = tf.layers.dense(inputs = dense1, units = 16, activation = tf.nn.relu, name='dense2', use_bias=True)
-		# dense3 = tf.layers.dense(inputs = dense2, units = 32, activation = tf.nn.relu, name='dense3', use_bias=True)
+		# dense3 = tf.layers.dense(inputs = dense2, units = 16, activation = tf.nn.relu, name='dense3', use_bias=True)
 		# dense4 = tf.layers.dense(inputs=dense3, units=256, activation=tf.nn.relu, name='dense4', use_bias=True)
 
 		# Output Layer
@@ -53,7 +53,7 @@ class QNetwork():
 		loss = tf.losses.mean_squared_error(labels=labels, predictions=predict_, weights=1.0)
 
 		# optimizer = tf.train.GradientDescentOptimizer(learning_rate = 0.0001)
-		optimizer = tf.train.AdamOptimizer(learning_rate = 0.0001)
+		optimizer = tf.train.AdamOptimizer(learning_rate=0.0001)
 
 		train_op = optimizer.minimize(loss = loss, global_step = tf.train.get_global_step())
 		
@@ -94,8 +94,8 @@ class QNetwork():
 		ckpt = tf.train.get_checkpoint_state('./save/')
 
 		if ckpt and ckpt.model_checkpoint_path:
-			print("Loading model: ", ckpt.all_model_checkpoint_paths[int(model_file/500) - 1])
-			self.saver.restore(sess, ckpt.all_model_checkpoint_paths[int(model_file/500) - 1])
+			print("Loading model: ", ckpt.all_model_checkpoint_paths[int(model_file/500)])
+			self.saver.restore(sess, ckpt.all_model_checkpoint_paths[int(model_file/500)])
 			# for v in tf.global_variables():
 			# 	print(v.name)
 		else:
@@ -128,8 +128,8 @@ class Replay_Memory():
 		# This function returns a batch of randomly sampled transitions - i.e. state, action, reward, next state, terminal flag tuples. 
 		# You will feed this to your model to train.
 
-		samples = random.sample(range(1,len(self.memory)), 32);
-		sample_batch = [self.memory[s] for s in samples];
+		samples = random.sample(range(1,len(self.memory)), 32)
+		sample_batch = [self.memory[s] for s in samples]
 
 		return sample_batch
 
@@ -167,22 +167,22 @@ class DQN_Agent():
 		self.env = environment_name
 		self.render = render
 
-		# self.nS = 4	# For CartPole-v0
-		# self.nA = 2
-		# self.gamma = 0.99
+		self.nS = 4	# For CartPole-v0
+		self.nA = 2
+		self.gamma = 0.99
 
-		self.nS = 2	 # For MountainCar-v0
-		self.nA = 3
-		self.gamma = 1.0
+		# self.nS = 2	 # For MountainCar-v0
+		# self.nA = 3
+		# self.gamma = 1.0
 		
 		self.net = QNetwork(self.env, sess, self.nS, self.nA)
 
 		self.burn_size = 10000
-		self.memory_size = 10001
+		self.memory_size = 50000
 		self.replay_memory = Replay_Memory(self.memory_size, self.burn_size)
 
 		self.max_iterations = 200
-		self.max_episodes = 3000
+		self.max_episodes = 10001
 		self.epsilon = 0.5 
 
 		self.updateWeightIter = 100  # Another random number for now
@@ -266,7 +266,7 @@ class DQN_Agent():
 			tf.summary.scalar('qFunc_per_episode', tf.convert_to_tensor(qFunc_per_episode))
 
 			for iter_no in range(self.max_iterations):
-				print('Iteration Number: %d' % iter_no)
+				# print('Iteration Number: %d' % iter_no)
 				
 				if isTerminal:
 
@@ -278,26 +278,32 @@ class DQN_Agent():
 					# target_ = np.reshape(target_, (1,self.nA))
 					# loss_weights_ = np.reshape(loss_weights_, (1,self.nA))
 					xCurrent = np.reshape(xCurrent, (self.nS,1))
+
 					target = reward
+
 					target = np.reshape(target, (1,1))
 					# _, wCurrent, act_qFuncCurrent, loss_ = sess.run([train_op, W, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
 					_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target})
 					total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0, currentAction]
 					# print('Q per episode: %f' % total_qFuncCurrent)
-					print('******* EPISODE TERMINATED *******')
+					# print('******* EPISODE TERMINATED *******')
+					print("episode: {}/{}, score: {}".format(epi_no, self.max_episodes, iter_no))
 					steps_per_episode.append(iter_no)
 					qFunc_per_episode.append(total_qFuncCurrent)
 					break
 
 				# qFuncOld = np.matmul(xNext, wOld) # Q(S', A', w-) # forward pass of the net with current weights with nextState, nextAction
-				xNext = np.reshape(xNext, (self.nS,1))
-				qFuncOld = sess.run(output, feed_dict={features_:xNext})
+				xNext = np.reshape(xNext, (self.nS, 1))
+				qFuncOld = sess.run(output, feed_dict={features_: xNext})
 				nextAction = self.epsilon_greedy_policy(qFuncOld, epi_no)
-				act_qFuncOld = qFuncOld[0, nextAction]	# max(Q(S', A', w-))
+				act_qFuncOld = qFuncOld[0, nextAction]  # max(Q(S', A', w-))
 
 				# qFuncCurrent = np.matmul(xCurrent, wCurrent)  # forward pass of the net with old weights with new nextState, new nextAction
 				# act_qFuncCurrent = qFuncCurrent[currentAction] # Q(S, A, w)
-
+				# if iter_no == self.max_iterations - 1:
+				# 	reward = reward + 10
+				# else:
+				reward = reward
 				target = reward + gamma * act_qFuncOld # r + gamma*Q(S', A', w-)
 				# target_ = np.zeros((self.nA, 1))
 				# target_[currentAction,0] = target
@@ -401,7 +407,7 @@ class DQN_Agent():
 
 		############################### LOAD MODEL ###########################
 
-		# self.net.load_model(sess, 2500)
+		# self.net.load_model(sess, 500)
 
 		######################################################################
 
@@ -434,7 +440,7 @@ class DQN_Agent():
 
 				xNext = np.reshape(xNext, (self.nS,1))
 				qFuncOld = sess.run(output, feed_dict={features_:xNext})
-				nextAction = self.epsilon_greedy_policy(qFuncOld, epi_no)
+				nextAction = self.greedy_policy(qFuncOld)
 				act_qFuncOld = qFuncOld[0, nextAction]	# max(Q(S', A', w-))
 
 				target = reward + gamma * act_qFuncOld # r + gamma*Q(S', A', w-)
@@ -454,8 +460,8 @@ class DQN_Agent():
 
 			################## Saving models ##################
 
-			if epi_no % 500 == 0:
-				self.net.save_model_weights(sess, epi_no)
+			# if epi_no % 500 == 0:
+			# 	self.net.save_model_weights(sess, epi_no)
 
 			###################################################
 		
@@ -491,7 +497,8 @@ class DQN_Agent():
 			if isTerminal:
 				xCurrent = env.reset()
 				currentAction = env.action_space.sample()
-				xNext, reward, isTerminal, _ = env.step(currentAction)	
+				xNext, reward, isTerminal, _ = env.step(currentAction)
+				# reward = reward + 10
 
 			else:
 				xCurrent = xNext
@@ -528,14 +535,15 @@ def main(args):
 	output = tf.placeholder(dtype = tf.float32)
 	W = tf.placeholder(dtype = tf.float32)
 	loss = tf.placeholder(dtype = tf.float32)
-	# features_ = tf.placeholder(dtype = tf.float32, shape = [4,1])	# CartPole-v0
-	features_ = tf.placeholder(dtype = tf.float32, shape = [2,1]) 	# MountainCar-v0
+	features_ = tf.placeholder(dtype = tf.float32, shape = [4,1])	# CartPole-v0
+	# features_ = tf.placeholder(dtype = tf.float32, shape = [2,1]) 	# MountainCar-v0
 	# saver = tf.train.Saver(tf.global_variables())
 
 	# W = tf.Variable(tf.random_uniform([4,2], 0, 0.01))
 	
 	agent = DQN_Agent(env, sess, render)
 	agent.train(sess)
+	# agent.test(sess)
 	writer.close()
 
 if __name__ == '__main__':
