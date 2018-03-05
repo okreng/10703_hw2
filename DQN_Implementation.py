@@ -38,11 +38,11 @@ class QNetwork():
 		# dense = tf.layers.dense(inputs = input_layer, units = nS, activation = None, name = 'dense')
 		dense1 = tf.layers.dense(inputs = input_layer, units = 16, activation = tf.nn.relu, name = 'dense1', use_bias=True)
 		dense2 = tf.layers.dense(inputs = dense1, units = 16, activation = tf.nn.relu, name='dense2', use_bias=True)
-		# dense3 = tf.layers.dense(inputs = dense2, units = 16, activation = tf.nn.relu, name='dense3', use_bias=True)
-		# dense4 = tf.layers.dense(inputs=dense3, units=256, activation=tf.nn.relu, name='dense4', use_bias=True)
+		dense3 = tf.layers.dense(inputs = dense2, units = 16, activation = tf.nn.relu, name='dense3', use_bias=True)
+		dense4 = tf.layers.dense(inputs=dense3, units=256, activation=tf.nn.relu, name='dense4', use_bias=True)
 
 		# Output Layer
-		output = tf.layers.dense(inputs = dense2, units = nA, name = 'output')
+		output = tf.layers.dense(inputs = dense4, units = nA, name = 'output')
 		
 		#####################
 
@@ -177,7 +177,7 @@ class DQN_Agent():
 		
 		self.net = QNetwork(self.env, sess, self.nS, self.nA)
 
-		self.burn_size = 10000
+		self.burn_size = 30000
 		self.memory_size = 50000
 		self.replay_memory = Replay_Memory(self.memory_size, self.burn_size)
 
@@ -199,7 +199,10 @@ class DQN_Agent():
 		eps = self.epsilon
 		num_actions = self.nA 
 
-		eps = eps/((epi_number/(self.max_episodes/10)) + 1)
+		if epi_number < self.max_episodes/2:
+			eps = eps/((epi_number/(self.max_episodes/10)) + 1)
+		else:
+			eps = 0
 		
 		nextAction = np.argmax(q_values)			
 
@@ -252,7 +255,7 @@ class DQN_Agent():
 		######################################################################
 
 		for epi_no in range(self.max_episodes):
-			print('Episode Number: %d' % epi_no)
+			# print('Episode Number: %d' % epi_no)
 			total_qFuncCurrent = 0
 			
 			# Random start-action pair right
@@ -303,7 +306,7 @@ class DQN_Agent():
 				# if iter_no == self.max_iterations - 1:
 				# 	reward = reward + 10
 				# else:
-				reward = reward
+				# reward = reward
 				target = reward + gamma * act_qFuncOld # r + gamma*Q(S', A', w-)
 				# target_ = np.zeros((self.nA, 1))
 				# target_[currentAction,0] = target
