@@ -26,7 +26,7 @@ class QNetwork():
 		# act = tf.placeholder(dtype = tf.int32, name='act')
 		act = tf.placeholder(dtype = tf.int32, shape=[None], name='act')
 		# labels = tf.placeholder(dtype = tf.float32, shape = [1, 1], name='labels')
-		labels = tf.placeholder(dtype=tf.float32, shape=[None, 3], name='labels')
+		labels = tf.placeholder(dtype=tf.float32, shape=[None, nA], name='labels')
 		# loss_weights = tf.placeholder(dtype = tf.float32, shape = [1, nA])
 		loss_weights = tf.placeholder(dtype=tf.float32, shape=[None, nA], name='loss_weights')
 		
@@ -173,13 +173,13 @@ class DQN_Agent():
 		self.env = environment_name
 		self.render = render
 
-		# self.nS = 4	# For CartPole-v0
-		# self.nA = 2
-		# self.gamma = 0.99
+		self.nS = 4	# For CartPole-v0
+		self.nA = 2
+		self.gamma = 0.99
 
-		self.nS = 2	 # For MountainCar-v0
-		self.nA = 3
-		self.gamma = 1.0
+		# self.nS = 2	 # For MountainCar-v0
+		# self.nA = 3
+		# self.gamma = 1.0
 		
 		self.net = QNetwork(self.env, sess, self.nS, self.nA)
 
@@ -188,7 +188,7 @@ class DQN_Agent():
 		self.replay_memory = Replay_Memory(self.memory_size, self.burn_size)
 
 		self.max_iterations = 200
-		self.max_episodes = 5001
+		self.max_episodes = 501
 		self.epsilon = 0.5 
 
 		self.updateWeightIter = 100  # Another random number for now
@@ -257,7 +257,7 @@ class DQN_Agent():
 		
 		############################### LOAD MODEL ###########################
 
-		# self.net.load_model(sess, 2500)
+		# self.net.load_model(sess, 500)
 
 		######################################################################
 
@@ -281,8 +281,9 @@ class DQN_Agent():
 			for iter_no in range(self.max_iterations):
 				# print('Iteration Number: %d' % iter_no)
 				
-				# if isTerminal:
-				if nextState[0] >= 0.5:
+				if isTerminal:
+				# if nextState[0] >= 0.5:
+					target = reward
 					currentAction = np.reshape(currentAction, (-1))
 					target_ = np.zeros((1, self.nA))
 					target_[0, currentAction] = target
@@ -291,11 +292,9 @@ class DQN_Agent():
 					xCurrent = np.reshape(xCurrent, (-1,self.nS))
 					# target_ = np.reshape(target_, (1,self.nA))
 					loss_weights_ = np.reshape(loss_weights_, (-1,self.nA))
+					# print(loss_weights_)
 					xCurrent = np.reshape(xCurrent, (-1,self.nS))
 
-					target = reward
-
-					target = np.reshape(target, (1,1))
 					# _, wCurrent, act_qFuncCurrent, loss_ = sess.run([train_op, W, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
 					_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
 					total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0, currentAction]
@@ -326,11 +325,11 @@ class DQN_Agent():
 				# target_[currentAction,0] = target
 				target_[0, currentAction] = target
 				loss_weights_ = np.zeros((self.nA, 1))
-				loss_weights_[currentAction,0] = 1.0
+				loss_weights_[currentAction, 0] = 1.0
 				# xCurrent = np.reshape(xCurrent, (self.nS,1))
 				xCurrent = np.reshape(xCurrent,(-1,self.nS))
 				target = np.reshape(target, (1,1))
-				loss_weights_ = np.reshape(loss_weights_, (1,self.nA))
+				loss_weights_ = np.reshape(loss_weights_, (-1,self.nA))
 				# _, wCurrent, act_qFuncCurrent, loss_ = sess.run([train_op, W, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
 				_, qFuncCurrent, loss_, summary, = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
 				
