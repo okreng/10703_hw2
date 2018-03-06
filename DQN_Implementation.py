@@ -39,10 +39,10 @@ class QNetwork():
 		dense1 = tf.layers.dense(inputs = input_layer, units = 32, activation = tf.nn.relu, name = 'dense1', use_bias=True)
 		dense2 = tf.layers.dense(inputs = dense1, units = 32, activation = tf.nn.relu, name='dense2', use_bias=True)
 		dense3 = tf.layers.dense(inputs = dense2, units = 32, activation = tf.nn.relu, name='dense3', use_bias=True)
-		dense4 = tf.layers.dense(inputs=dense3, units=256, activation=tf.nn.relu, name='dense4', use_bias=True)
+		# dense4 = tf.layers.dense(inputs=dense3, units=256, activation=tf.nn.relu, name='dense4', use_bias=True)
 
 		# Output Layer
-		output = tf.layers.dense(inputs = dense4, units = nA, name = 'output')
+		output = tf.layers.dense(inputs = dense3, units = nA, name = 'output')
 		
 		#####################
 
@@ -231,7 +231,7 @@ class DQN_Agent():
 
 		sess.run(tf.global_variables_initializer())
 		global train_op, W, output, features, act, labels, features_, loss, writer, merged, weights, loss_weights
-		exp_replay = True
+		exp_replay = False
 		env = self.env
 		wIter = 0
 		updateWeightIter = self.updateWeightIter
