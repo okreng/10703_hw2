@@ -41,8 +41,8 @@ class QNetwork():
 
 		# Dense Layer
 		# dense = tf.layers.dense(inputs = input_layer, units = nS, activation = None, name = 'dense')
-		dense1 = tf.layers.dense(inputs = input_layer, units = 16, activation = tf.nn.relu, name = 'dense1', use_bias=True)
-		dense2 = tf.layers.dense(inputs = dense1, units = 16, activation = tf.nn.relu, name='dense2', use_bias=True)
+		dense1 = tf.layers.dense(inputs = input_layer, units = 64, activation = tf.nn.relu, name = 'dense1', use_bias=True)
+		dense2 = tf.layers.dense(inputs = dense1, units = 32, activation = tf.nn.relu, name='dense2', use_bias=True)
 		dense3 = tf.layers.dense(inputs = dense2, units = 16, activation = tf.nn.relu, name='dense3', use_bias=True)
 		# dense4 = tf.layers.dense(inputs=dense3, units=256, activation=tf.nn.relu, name='dense4', use_bias=True)
 
@@ -64,7 +64,7 @@ class QNetwork():
 		train_op = optimizer.minimize(loss = loss, global_step = tf.train.get_global_step())
 		
 		# TODO: NOT SURE IF THIS NEEDS TO BE EXPLICITLY SAVED OR NOT
-		self.saver = tf.train.Saver()
+		self.saver = tf.train.Saver(max_to_keep=0)
 		
 		tf.summary.scalar('loss', loss)
 		# tf.summary.scalar('output', output)
@@ -100,8 +100,8 @@ class QNetwork():
 		ckpt = tf.train.get_checkpoint_state('./save/')
 
 		if ckpt and ckpt.model_checkpoint_path:
-			print("Loading model: ", ckpt.all_model_checkpoint_paths[int(model_file/500)])
-			self.saver.restore(sess, ckpt.all_model_checkpoint_paths[int(model_file/500)])
+			print("Loading model: ", ckpt.all_model_checkpoint_paths[int(model_file/500)-3])
+			self.saver.restore(sess, ckpt.all_model_checkpoint_paths[int(model_file/500)-3])
 			# for v in tf.global_variables():
 			# 	print(v.name)
 		else:
@@ -448,7 +448,7 @@ class DQN_Agent():
 
 		############################### LOAD MODEL ###########################
 
-		# self.net.load_model(sess, 500)
+		self.net.load_model(sess, 3500)
 
 		######################################################################
 
@@ -469,9 +469,14 @@ class DQN_Agent():
 				
 				if isTerminal:
 					target = reward
-					xCurrent = np.reshape(xCurrent, (self.nS,1))
-					target = np.reshape(target, (1,1))
-					_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target})
+					xCurrent = np.reshape(xCurrent, (-1,self.nS))
+					target_ = np.zeros((1, self.nA))
+					target_[0, currentAction] = target
+					currentAction = np.reshape(currentAction, (-1))
+					loss_weights_ = np.zeros((self.nA, 1))
+					loss_weights_[currentAction, 0] = 1.0
+					loss_weights_ = np.reshape(loss_weights_, (-1, self.nA))
+					_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
 					total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0, currentAction]
 					# print('Q per episode: %f' % total_qFuncCurrent)
 					print('******* EPISODE TERMINATED *******')
@@ -479,15 +484,22 @@ class DQN_Agent():
 					qFunc_per_episode.append(total_qFuncCurrent)
 					break
 
-				xNext = np.reshape(xNext, (self.nS,1))
+				xNext = np.reshape(xNext, (-1,self.nS))
 				qFuncOld = sess.run(output, feed_dict={features_:xNext})
 				nextAction = self.greedy_policy(qFuncOld)
 				act_qFuncOld = qFuncOld[0, nextAction]	# max(Q(S', A', w-))
 
+				currentAction = np.reshape(currentAction, (-1))
 				target = reward + gamma * act_qFuncOld # r + gamma*Q(S', A', w-)
-				xCurrent = np.reshape(xCurrent, (self.nS,1))
-				target = np.reshape(target, (1,1))
-				_, qFuncCurrent, loss_, summary, = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target})
+				xCurrent = np.reshape(xCurrent, (-1, self.nS))
+				# target = np.reshape(target, (1,1))
+				loss_weights_ = np.zeros((self.nA, 1))
+				loss_weights_[currentAction, 0] = 1.0
+				loss_weights_ = np.reshape(loss_weights_, (-1, self.nA))
+
+				target_ = np.zeros((1, self.nA))
+				target_[0, currentAction] = target
+				_, qFuncCurrent, loss_, summary, = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
 				
 				total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0, currentAction]
 				# print('Loss: %f' % loss_)
@@ -583,7 +595,7 @@ def main(args):
 	# W = tf.Variable(tf.random_uniform([4,2], 0, 0.01))
 	
 	agent = DQN_Agent(env, sess, render)
-	agent.train(sess)
+	agent.test(sess)
 	# agent.test(sess)
 	writer.close()
 
