@@ -350,25 +350,42 @@ class DQN_Agent():
 				if exp_replay:
 					batches = 32
 					batch_list = self.replay_memory.sample_batch(batches)
+					r_targ = np.zeros((batches, self.nA))
+					a_batch = np.zeros((batches, 1))
+					x_batch = np.zeros((batches, self.nS))
+					loss_weights_ = np.zeros((batches, self.nA))
+					# print(batch_list)
 					for batch in range(batches):
 						term_batch = batch_list[batch][4]
-						a_batch = batch_list[batch][1]
-						x_batch = batch_list[batch][0]
-						x_batch = np.reshape(x_batch,(self.nS,1))
+						a_batch[batch] = batch_list[batch][1]
+						action = int(a_batch[batch])
+						x_batch[batch] = batch_list[batch][0]
+						loss_weights_[batch][action] = 1
+						# x_batch = np.reshape(x_batch,(-1,self.nS))
 						xp_batch = batch_list[batch][3]
-						xp_batch = np.reshape(xp_batch,(self.nS,1))
+						xp_batch = np.reshape(xp_batch, (-1, self.nS))
 
 						if (term_batch):
-							r_targ = batch_list[batch][2]
+							r_targ[batch][action] = batch_list[batch][2]
 
 						else:
 							qFuncBatch = sess.run(output, feed_dict={features_: xp_batch})
 							a_prime = self.epsilon_greedy_policy(qFuncBatch, epi_no)
-							out_prime = sess.run(output, feed_dict={features_: xp_batch, act: a_prime})
-							r_targ = batch_list[batch][2] + gamma * out_prime[0, a_prime]
+							a_prime_feed = np.reshape(a_prime, (1))
+							out_prime = sess.run(output, feed_dict={features_: xp_batch, act: a_prime_feed})
+							r_targ[batch][action] = batch_list[batch][2] + gamma * out_prime[0, a_prime]
 						
-						r_targ = np.reshape(r_targ, (1,1))
-						_, qFuncCurrent, loss_, _ = sess.run([train_op, output, loss, merged], feed_dict={features_: x_batch, act: a_batch, labels: r_targ})
+					r_targ = np.reshape(r_targ, (-1, self.nA))
+					# _, qFuncCurrent, loss_, _ = sess.run([train_op, output, loss, merged], feed_dict={features_: x_batch, act: a_batch, labels: r_targ, loss_weights: loss_weights_})
+
+					a_batch = np.reshape(a_batch, (-1))
+					# print(a_batch)
+					x_batch = np.reshape(x_batch, (-1, self.nS))
+					# print(x_batch)
+					# print(r_targ)
+					# print(loss_weights_)
+					# input('wait')
+					sess.run([], feed_dict={features_: x_batch, act: a_batch, labels: r_targ, loss_weights: loss_weights_})
 
 				# Appending to replay memory
 				if len(self.replay_memory.get_memory()) == self.memory_size:
