@@ -18,12 +18,17 @@ class QNetwork():
 		# tf.reset_default_graph()
 		global train_op, W, output, features_, act, labels, loss, merged, writer, weights, loss_weights
 
-		features_ = tf.placeholder(dtype = tf.float32, shape = [nS, 1], name='features_')
-		features = tf.reshape(features_,[1, nS])
-		
-		act = tf.placeholder(dtype = tf.int32, name='act')
-		labels = tf.placeholder(dtype = tf.float32, shape = [1, 1], name='labels')
-		loss_weights = tf.placeholder(dtype = tf.float32, shape = [1, nA])
+		# features_ = tf.placeholder(dtype = tf.float32, shape = [nS,1], name='features_')
+		features_ = tf.placeholder(dtype=tf.float32, shape=[None, nS], name='features_')
+		# features = tf.reshape(features_,[1, nS])
+		features = features_
+
+		# act = tf.placeholder(dtype = tf.int32, name='act')
+		act = tf.placeholder(dtype = tf.int32, shape=[None], name='act')
+		# labels = tf.placeholder(dtype = tf.float32, shape = [1, 1], name='labels')
+		labels = tf.placeholder(dtype=tf.float32, shape=[None, 3], name='labels')
+		# loss_weights = tf.placeholder(dtype = tf.float32, shape = [1, nA])
+		loss_weights = tf.placeholder(dtype=tf.float32, shape=[None, nA], name='loss_weights')
 		
 		# W = tf.Variable(tf.random_uniform([nS,nA], 0, 0.01))
 		# output = tf.matmul(features, W)
@@ -39,18 +44,19 @@ class QNetwork():
 		dense1 = tf.layers.dense(inputs = input_layer, units = 16, activation = tf.nn.relu, name = 'dense1', use_bias=True)
 		dense2 = tf.layers.dense(inputs = dense1, units = 16, activation = tf.nn.relu, name='dense2', use_bias=True)
 		dense3 = tf.layers.dense(inputs = dense2, units = 16, activation = tf.nn.relu, name='dense3', use_bias=True)
-		dense4 = tf.layers.dense(inputs=dense3, units=256, activation=tf.nn.relu, name='dense4', use_bias=True)
+		# dense4 = tf.layers.dense(inputs=dense3, units=256, activation=tf.nn.relu, name='dense4', use_bias=True)
 
 		# Output Layer
-		output = tf.layers.dense(inputs = dense4, units = nA, name = 'output')
+		output = tf.layers.dense(inputs = dense3, units = nA, name = 'output')
 		
 		#####################
 
-		predict = output[0, act]
-		predict_ = tf.reshape(predict, [1,1])
+		# predict = output[0, act]
+		# predict_ = tf.reshape(predict, [1,1])
 		# labels_ = output
 		# labels_[0, act] = labels
-		loss = tf.losses.mean_squared_error(labels=labels, predictions=predict_, weights=1.0)
+		# loss = tf.losses.mean_squared_error(labels=labels, predictions=predict_, weights=1.0)
+		loss = tf.losses.mean_squared_error(labels=labels, predictions=output, weights=loss_weights)
 
 		# optimizer = tf.train.GradientDescentOptimizer(learning_rate = 0.0001)
 		optimizer = tf.train.AdamOptimizer(learning_rate=0.0001)
@@ -182,7 +188,7 @@ class DQN_Agent():
 		self.replay_memory = Replay_Memory(self.memory_size, self.burn_size)
 
 		self.max_iterations = 200
-		self.max_episodes = 10001
+		self.max_episodes = 5001
 		self.epsilon = 0.5 
 
 		self.updateWeightIter = 100  # Another random number for now
@@ -232,7 +238,7 @@ class DQN_Agent():
 		# tf.reset_default_graph()
 
 		# TODO: Set this value to True if using experience replay
-		exp_replay = False
+		exp_replay = True
 
 		sess.run(tf.global_variables_initializer())
 		global train_op, W, output, features, act, labels, features_, loss, writer, merged, weights, loss_weights
@@ -256,38 +262,42 @@ class DQN_Agent():
 		######################################################################
 
 		for epi_no in range(self.max_episodes):
-			# print('Episode Number: %d' % epi_no)
+			print('Episode Number: %d' % epi_no)
 			total_qFuncCurrent = 0
 			
 			# Random start-action pair right
 			currentState = env.reset()	# S
-			currentAction = env.action_space.sample() # A	
+			currentAction = env.action_space.sample() # A
+			# print(currentAction)
+			# currentAction = np.reshape(currentAction, (-1))
+			# print(currentAction)
 			xCurrent = currentState
 			
 			nextState, reward, isTerminal, debugInfo = env.step(currentAction)				
-			xNext = nextState # A' , generate feature space from nextState
+			xNext = nextState  # A' , generate feature space from nextState
 			
-			tf.summary.scalar('qFunc_per_episode', tf.convert_to_tensor(qFunc_per_episode))
+			# tf.summary.scalar('qFunc_per_episode', tf.convert_to_tensor(qFunc_per_episode))
 
 			for iter_no in range(self.max_iterations):
 				# print('Iteration Number: %d' % iter_no)
 				
-				if isTerminal:
-
-					target_ = np.zeros((self.nA, 1))
-					target_[currentAction,0] = target
+				# if isTerminal:
+				if nextState[0] >= 0.5:
+					currentAction = np.reshape(currentAction, (-1))
+					target_ = np.zeros((1, self.nA))
+					target_[0, currentAction] = target
 					loss_weights_ = np.zeros((self.nA, 1))
 					loss_weights_[currentAction,0] = 1.0
-					xCurrent = np.reshape(xCurrent, (self.nS,1))
-					target_ = np.reshape(target_, (1,self.nA))
-					loss_weights_ = np.reshape(loss_weights_, (1,self.nA))
-					xCurrent = np.reshape(xCurrent, (self.nS,1))
+					xCurrent = np.reshape(xCurrent, (-1,self.nS))
+					# target_ = np.reshape(target_, (1,self.nA))
+					loss_weights_ = np.reshape(loss_weights_, (-1,self.nA))
+					xCurrent = np.reshape(xCurrent, (-1,self.nS))
 
 					target = reward
 
 					target = np.reshape(target, (1,1))
 					# _, wCurrent, act_qFuncCurrent, loss_ = sess.run([train_op, W, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
-					_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target, loss_weights:loss_weights_})
+					_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
 					total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0, currentAction]
 					# print('Q per episode: %f' % total_qFuncCurrent)
 					# print('******* EPISODE TERMINATED *******')
@@ -297,7 +307,8 @@ class DQN_Agent():
 					break
 
 				# qFuncOld = np.matmul(xNext, wOld) # Q(S', A', w-) # forward pass of the net with current weights with nextState, nextAction
-				xNext = np.reshape(xNext, (self.nS, 1))
+				# xNext = np.reshape(xNext, (self.nS, 1))
+				xNext = np.reshape(xNext, (-1, self.nS))
 				qFuncOld = sess.run(output, feed_dict={features_: xNext})
 				nextAction = self.epsilon_greedy_policy(qFuncOld, epi_no)
 				act_qFuncOld = qFuncOld[0, nextAction]  # max(Q(S', A', w-))
@@ -308,16 +319,20 @@ class DQN_Agent():
 				# 	reward = reward + 10
 				# else:
 				# reward = reward
+				currentAction = np.reshape(currentAction, (-1))
 				target = reward + gamma * act_qFuncOld # r + gamma*Q(S', A', w-)
-				target_ = np.zeros((self.nA, 1))
-				target_[currentAction,0] = target
+				# target = reward + gamma * qFuncOld
+				target_ = np.zeros((1,self.nA))
+				# target_[currentAction,0] = target
+				target_[0, currentAction] = target
 				loss_weights_ = np.zeros((self.nA, 1))
 				loss_weights_[currentAction,0] = 1.0
-				xCurrent = np.reshape(xCurrent, (self.nS,1))
+				# xCurrent = np.reshape(xCurrent, (self.nS,1))
+				xCurrent = np.reshape(xCurrent,(-1,self.nS))
 				target = np.reshape(target, (1,1))
 				loss_weights_ = np.reshape(loss_weights_, (1,self.nA))
 				# _, wCurrent, act_qFuncCurrent, loss_ = sess.run([train_op, W, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
-				_, qFuncCurrent, loss_, summary, = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target, loss_weights:loss_weights_})
+				_, qFuncCurrent, loss_, summary, = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
 				
 				# with tf.variable_scope("foo", reuse = tf.AUTO_REUSE):
 				# 	weights = tf.get_variable("output/kernel:0", [2,3])
@@ -491,7 +506,7 @@ class DQN_Agent():
 		xNext, reward, isTerminal, _ = env.step(currentAction)
 
 		for i in range(self.burn_size):
-			xNext = np.reshape(xNext, (self.nS,1))
+			xNext = np.reshape(xNext, (-1,self.nS))
 			qFunc = sess.run(output, feed_dict={features_:xNext})
 			nextAction = self.epsilon_greedy_policy(qFunc, 0)  # Want to maximize exploration, don't decay epsilon
 
