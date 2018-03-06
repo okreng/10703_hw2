@@ -11,19 +11,19 @@ class QNetwork():
 	# The network should take in state of the world as an input, 
 	# and output Q values of the actions available to the agent as the output. 
 
-	def __init__(self, environment_name, sess, nS, nA):
+	def __init__(self, environment_name, sess, nS, nA, batch_size=32):
 		# Define your network architecture here. It is also a good idea to define any training operations 
 		# and optimizers here, initialize your variables, or alternately compile your model here.  
 		
 		# tf.reset_default_graph()
 		global train_op, W, output, features_, act, labels, loss, merged, writer, weights, loss_weights
 
-		features_ = tf.placeholder(dtype = tf.float32, shape = [nS,1])
-		features = tf.reshape(features_,[1,nS])
+		features_ = tf.placeholder(dtype = tf.float32, shape = [nS, 1], name='features_')
+		features = tf.reshape(features_,[1, nS])
 		
-		act = tf.placeholder(dtype = tf.int32)
-		labels = tf.placeholder(dtype = tf.float32, shape = [1, nA])
-		loss_weights = tf.placeholder(dtype = tf.float32, shape = [1, nA])
+		act = tf.placeholder(dtype = tf.int32, name='act')
+		labels = tf.placeholder(dtype = tf.float32, shape = [1, 1], name='labels')
+		# loss_weights = tf.placeholder(dtype = tf.float32, shape = [1, nA])
 		
 		# W = tf.Variable(tf.random_uniform([nS,nA], 0, 0.01))
 		# output = tf.matmul(features, W)
@@ -36,24 +36,31 @@ class QNetwork():
 
 		# Dense Layer
 		# dense = tf.layers.dense(inputs = input_layer, units = nS, activation = None, name = 'dense')
+<<<<<<< HEAD
 		dense1 = tf.layers.dense(inputs = input_layer, units = 32, activation = tf.nn.relu, name = 'dense1', use_bias=True)
 		dense2 = tf.layers.dense(inputs = dense1, units = 32, activation = tf.nn.relu, name='dense2', use_bias=True)
 		dense3 = tf.layers.dense(inputs = dense2, units = 32, activation = tf.nn.relu, name='dense3', use_bias=True)
 		# dense4 = tf.layers.dense(inputs=dense3, units=256, activation=tf.nn.relu, name='dense4', use_bias=True)
+=======
+		dense1 = tf.layers.dense(inputs = input_layer, units = 16, activation = tf.nn.relu, name = 'dense1', use_bias=True)
+		dense2 = tf.layers.dense(inputs = dense1, units = 16, activation = tf.nn.relu, name='dense2', use_bias=True)
+		dense3 = tf.layers.dense(inputs = dense2, units = 16, activation = tf.nn.relu, name='dense3', use_bias=True)
+		dense4 = tf.layers.dense(inputs=dense3, units=256, activation=tf.nn.relu, name='dense4', use_bias=True)
+>>>>>>> 5d26de031c200589235a381a93bcc732e8c3d0b7
 
 		# Output Layer
 		output = tf.layers.dense(inputs = dense3, units = nA, name = 'output')
 		
 		#####################
 
-		# predict = output[0, act]
-		# predict_ = tf.reshape(predict, [1,1])
+		predict = output[0, act]
+		predict_ = tf.reshape(predict, [1,1])
 		# labels_ = output
 		# labels_[0, act] = labels
-		loss = tf.losses.mean_squared_error(labels=labels, predictions=output, weights=loss_weights)
+		loss = tf.losses.mean_squared_error(labels=labels, predictions=predict_, weights=1.0)
 
 		# optimizer = tf.train.GradientDescentOptimizer(learning_rate = 0.0001)
-		optimizer = tf.train.AdamOptimizer(learning_rate = 0.0001)
+		optimizer = tf.train.AdamOptimizer(learning_rate=0.0001)
 
 		train_op = optimizer.minimize(loss = loss, global_step = tf.train.get_global_step())
 		
@@ -118,6 +125,10 @@ class Replay_Memory():
 		# Burn in episodes define the number of episodes that are written into the memory from the 
 		# randomly initialized agent. Memory size is the maximum size after which old elements in the memory are replaced. 
 		# A simple (if not the most efficient) was to implement the memory is as a list of transitions. 
+<<<<<<< HEAD
+=======
+		
+>>>>>>> 5d26de031c200589235a381a93bcc732e8c3d0b7
 		self.memory = []
 		self.memory_size = memory_size
 		self.burn_in = burn_in
@@ -127,6 +138,10 @@ class Replay_Memory():
 	def sample_batch(self, batch_size=32):
 		# This function returns a batch of randomly sampled transitions - i.e. state, action, reward, next state, terminal flag tuples. 
 		# You will feed this to your model to train.
+<<<<<<< HEAD
+=======
+
+>>>>>>> 5d26de031c200589235a381a93bcc732e8c3d0b7
 		samples = random.sample(range(1,len(self.memory)), 32)
 		sample_batch = [self.memory[s] for s in samples]
 
@@ -170,11 +185,19 @@ class DQN_Agent():
 		self.nA = 2
 		self.gamma = 0.99
 
+<<<<<<< HEAD
 		# self.nS = 2	# For MountainCar-v0
+=======
+		# self.nS = 2	 # For MountainCar-v0
+>>>>>>> 5d26de031c200589235a381a93bcc732e8c3d0b7
 		# self.nA = 3
 		# self.gamma = 1.0
 		
 		self.net = QNetwork(self.env, sess, self.nS, self.nA)
+<<<<<<< HEAD
+=======
+
+>>>>>>> 5d26de031c200589235a381a93bcc732e8c3d0b7
 		self.burn_size = 30000
 		self.memory_size = 50000
 		self.replay_memory = Replay_Memory(self.memory_size, self.burn_size)
@@ -183,7 +206,7 @@ class DQN_Agent():
 		self.max_episodes = 10001
 		self.epsilon = 0.5 
 
-		self.updateWeightIter = 100 # Another random number for now
+		self.updateWeightIter = 100  # Another random number for now
 
 		self.alpha = 0.0001
 
@@ -217,7 +240,7 @@ class DQN_Agent():
 		
 		nextAction = np.argmax(q_values)			
 
-		return nextAction 
+		return nextAction
 
 	def train(self, sess):
 		# In this function, we will train our network. 
@@ -228,6 +251,9 @@ class DQN_Agent():
 		# transitions to memory, while also updating your model.
 
 		# tf.reset_default_graph()
+
+		# TODO: Set this value to True if using experience replay
+		exp_replay = True
 
 		sess.run(tf.global_variables_initializer())
 		global train_op, W, output, features, act, labels, features_, loss, writer, merged, weights, loss_weights
@@ -260,23 +286,28 @@ class DQN_Agent():
 			
 			nextState, reward, isTerminal, debugInfo = env.step(currentAction)				
 			xNext = nextState # A' , generate feature space from nextState
+			
+			tf.summary.scalar('qFunc_per_episode', tf.convert_to_tensor(qFunc_per_episode))
 
 			for iter_no in range(self.max_iterations):
 				# print('Iteration Number: %d' % iter_no)
 				
 				if isTerminal:
-					target = reward
-					target_ = np.zeros((self.nA, 1))
-					target_[currentAction,0] = target
-					loss_weights_ = np.zeros((self.nA, 1))
-					loss_weights_[currentAction,0] = 1.0
-					xCurrent = np.reshape(xCurrent, (self.nS,1))
-					target_ = np.reshape(target_, (1,self.nA))
-					loss_weights_ = np.reshape(loss_weights_, (1,self.nA))
+
+					# target_ = np.zeros((self.nA, 1))
+					# target_[currentAction,0] = target
+					# loss_weights_ = np.zeros((self.nA, 1))
+					# loss_weights_[currentAction,0] = 1.0
 					# xCurrent = np.reshape(xCurrent, (self.nS,1))
-					# target = np.reshape(target, (1,1))
+					# target_ = np.reshape(target_, (1,self.nA))
+					# loss_weights_ = np.reshape(loss_weights_, (1,self.nA))
+					xCurrent = np.reshape(xCurrent, (self.nS,1))
+
+					target = reward
+
+					target = np.reshape(target, (1,1))
 					# _, wCurrent, act_qFuncCurrent, loss_ = sess.run([train_op, W, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
-					_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
+					_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target})
 					total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0, currentAction]
 					# print('Q per episode: %f' % total_qFuncCurrent)
 					# print('******* EPISODE TERMINATED *******')
@@ -286,24 +317,27 @@ class DQN_Agent():
 					break
 
 				# qFuncOld = np.matmul(xNext, wOld) # Q(S', A', w-) # forward pass of the net with current weights with nextState, nextAction
-				xNext = np.reshape(xNext, (self.nS,1))
-				qFuncOld = sess.run(output, feed_dict={features_:xNext})
+				xNext = np.reshape(xNext, (self.nS, 1))
+				qFuncOld = sess.run(output, feed_dict={features_: xNext})
 				nextAction = self.epsilon_greedy_policy(qFuncOld, epi_no)
-				act_qFuncOld = qFuncOld[0, nextAction]	# max(Q(S', A', w-))
+				act_qFuncOld = qFuncOld[0, nextAction]  # max(Q(S', A', w-))
 
 				# qFuncCurrent = np.matmul(xCurrent, wCurrent)  # forward pass of the net with old weights with new nextState, new nextAction
 				# act_qFuncCurrent = qFuncCurrent[currentAction] # Q(S, A, w)
-
+				# if iter_no == self.max_iterations - 1:
+				# 	reward = reward + 10
+				# else:
+				# reward = reward
 				target = reward + gamma * act_qFuncOld # r + gamma*Q(S', A', w-)
-				target_ = np.zeros((self.nA, 1))
-				target_[currentAction,0] = target
-				loss_weights_ = np.zeros((self.nA, 1))
-				loss_weights_[currentAction,0] = 1.0
+				# target_ = np.zeros((self.nA, 1))
+				# target_[currentAction,0] = target
+				# loss_weights_ = np.zeros((self.nA, 1))
+				# loss_weights_[currentAction,0] = 1.0
 				xCurrent = np.reshape(xCurrent, (self.nS,1))
-				target_ = np.reshape(target_, (1,self.nA))
-				loss_weights_ = np.reshape(loss_weights_, (1,self.nA))
+				target = np.reshape(target, (1,1))
+				# loss_weights_ = np.reshape(loss_weights_, (1,self.nA))
 				# _, wCurrent, act_qFuncCurrent, loss_ = sess.run([train_op, W, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
-				_, qFuncCurrent, loss_, summary, = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
+				_, qFuncCurrent, loss_, summary, = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target})
 				
 				# with tf.variable_scope("foo", reuse = tf.AUTO_REUSE):
 				# 	weights = tf.get_variable("output/kernel:0", [2,3])
@@ -317,6 +351,10 @@ class DQN_Agent():
 				nextState, reward, isTerminal, debugInfo = env.step(nextAction)				
 				xNext = nextState # generate feature space from new nextState
 
+<<<<<<< HEAD
+=======
+				# Perform updates in the case of experience replay
+>>>>>>> 5d26de031c200589235a381a93bcc732e8c3d0b7
 				if exp_replay:
 					batches = 32
 					batch_list = self.replay_memory.sample_batch(batches)
@@ -338,6 +376,7 @@ class DQN_Agent():
 							r_targ = batch_list[batch][2] + gamma * out_prime[0, a_prime]
 						
 						r_targ = np.reshape(r_targ, (1,1))
+<<<<<<< HEAD
 						target_ = np.zeros((self.nA, 1))
 						target_[a_batch,0] = r_targ
 						loss_weights_ = np.zeros((self.nA, 1))
@@ -345,6 +384,9 @@ class DQN_Agent():
 						target_ = np.reshape(target_, (1,self.nA))
 						loss_weights_ = np.reshape(loss_weights_, (1,self.nA))
 						_, qFuncCurrent, loss_, _ = sess.run([train_op, output, loss, merged], feed_dict={features_: x_batch, act: a_batch, labels:target_, loss_weights:loss_weights_})
+=======
+						_, qFuncCurrent, loss_, _ = sess.run([train_op, output, loss, merged], feed_dict={features_: x_batch, act: a_batch, labels: r_targ})
+>>>>>>> 5d26de031c200589235a381a93bcc732e8c3d0b7
 
 				# Appending to replay memory
 				if len(self.replay_memory.get_memory()) == self.memory_size:
@@ -357,10 +399,10 @@ class DQN_Agent():
 				# if wIter >= updateWeightIter:
 				# 	wOld = wCurrent
 				# 	wIter = 0
+				
+				# wIter += 1
 
 				####################################################################
-
-				wIter += 1
 
 				if self.render:
 					env.render()
@@ -385,20 +427,114 @@ class DQN_Agent():
 		plt.show()
 		return
 
-	def test(self, model_file=None):
+	def test(self, sess, model_file=None):
 		# Evaluate the performance of your agent over 100 episodes, by calculating cummulative rewards for the 100 episodes.
 		# Here you need to interact with the environment, irrespective of whether you are using a memory. 
-		pass
+		
+		sess.run(tf.global_variables_initializer())
+		global train_op, W, output, features, act, labels, features_, loss, writer, merged, weights, loss_weights
 
+		env = self.env
+		wIter = 0
+		updateWeightIter = self.updateWeightIter
+		gamma = self.gamma
+		alpha = self.alpha
+		steps_per_episode = []
+		qFunc_per_episode = []
+
+		############################### LOAD MODEL ###########################
+
+		# self.net.load_model(sess, 500)
+
+		######################################################################
+
+		for epi_no in range(100):
+			print('Episode Number: %d' % epi_no)
+			total_qFuncCurrent = 0
+			
+			# Random start-action pair right
+			currentState = env.reset()	# S
+			currentAction = env.action_space.sample() # A	
+			xCurrent = currentState
+			
+			nextState, reward, isTerminal, debugInfo = env.step(currentAction)				
+			xNext = nextState # A' , generate feature space from nextState
+
+			for iter_no in range(self.max_iterations):
+				print('Iteration Number: %d' % iter_no)
+				
+				if isTerminal:
+					target = reward
+					xCurrent = np.reshape(xCurrent, (self.nS,1))
+					target = np.reshape(target, (1,1))
+					_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target})
+					total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0, currentAction]
+					# print('Q per episode: %f' % total_qFuncCurrent)
+					print('******* EPISODE TERMINATED *******')
+					steps_per_episode.append(iter_no)
+					qFunc_per_episode.append(total_qFuncCurrent)
+					break
+
+				xNext = np.reshape(xNext, (self.nS,1))
+				qFuncOld = sess.run(output, feed_dict={features_:xNext})
+				nextAction = self.greedy_policy(qFuncOld)
+				act_qFuncOld = qFuncOld[0, nextAction]	# max(Q(S', A', w-))
+
+				target = reward + gamma * act_qFuncOld # r + gamma*Q(S', A', w-)
+				xCurrent = np.reshape(xCurrent, (self.nS,1))
+				target = np.reshape(target, (1,1))
+				_, qFuncCurrent, loss_, summary, = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target})
+				
+				total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0, currentAction]
+				# print('Loss: %f' % loss_)
+				xCurrent = xNext
+				currentAction = nextAction
+				nextState, reward, isTerminal, debugInfo = env.step(nextAction)				
+				xNext = nextState # generate feature space from new nextState
+
+<<<<<<< HEAD
+=======
+				if self.render:
+					env.render()
+
+			################## Saving models ##################
+
+			# if epi_no % 500 == 0:
+			# 	self.net.save_model_weights(sess, epi_no)
+
+			###################################################
+		
+			writer.add_summary(summary, iter_no + (epi_no * self.max_iterations))
+		
+		writer.close()
+
+		plt.figure(1)
+		plt.plot(steps_per_episode)
+		
+		plt.figure(2)
+		plt.plot(qFunc_per_episode)
+		
+		plt.show()
+		return
+
+>>>>>>> 5d26de031c200589235a381a93bcc732e8c3d0b7
 	def burn_in_memory(self, sess):
 		# Initialize your replay memory with a burn_in number of episodes / transitions. 
-
 		env = self.env
 		
 		xCurrent = env.reset()  # S
 		currentAction = env.action_space.sample()  # A
 		xNext, reward, isTerminal, _ = env.step(currentAction)
 
+<<<<<<< HEAD
+		env = self.env
+		
+		xCurrent = env.reset()  # S
+		currentAction = env.action_space.sample()  # A
+		xNext, reward, isTerminal, _ = env.step(currentAction)
+
+=======
+>>>>>>> 5d26de031c200589235a381a93bcc732e8c3d0b7
 		for i in range(self.burn_size):
 			xNext = np.reshape(xNext, (self.nS,1))
 			qFunc = sess.run(output, feed_dict={features_:xNext})
@@ -432,7 +568,7 @@ def main(args):
 	args = parse_arguments()
 	environment_name = args.env
 	render = False # args.render
-
+	print('Master branch')
 	# Setting the session to allow growth, so it doesn't allocate all GPU memory. 
 	gpu_ops = tf.GPUOptions(allow_growth=True)
 	config = tf.ConfigProto(gpu_options=gpu_ops)
@@ -448,14 +584,15 @@ def main(args):
 	output = tf.placeholder(dtype = tf.float32)
 	W = tf.placeholder(dtype = tf.float32)
 	loss = tf.placeholder(dtype = tf.float32)
-	# features_ = tf.placeholder(dtype = tf.float32, shape = [4,1])	# CartPole-v0
-	features_ = tf.placeholder(dtype = tf.float32, shape = [2,1]) 	# MountainCar-v0
+	features_ = tf.placeholder(dtype = tf.float32, shape = [4,1])	# CartPole-v0
+	# features_ = tf.placeholder(dtype = tf.float32, shape = [2,1]) 	# MountainCar-v0
 	# saver = tf.train.Saver(tf.global_variables())
 
 	# W = tf.Variable(tf.random_uniform([4,2], 0, 0.01))
 	
 	agent = DQN_Agent(env, sess, render)
 	agent.train(sess)
+	# agent.test(sess)
 	writer.close()
 
 if __name__ == '__main__':
