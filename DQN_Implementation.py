@@ -23,7 +23,7 @@ class QNetwork():
 		
 		act = tf.placeholder(dtype = tf.int32, name='act')
 		labels = tf.placeholder(dtype = tf.float32, shape = [1, 1], name='labels')
-		# loss_weights = tf.placeholder(dtype = tf.float32, shape = [1, nA])
+		loss_weights = tf.placeholder(dtype = tf.float32, shape = [1, nA])
 		
 		# W = tf.Variable(tf.random_uniform([nS,nA], 0, 0.01))
 		# output = tf.matmul(features, W)
@@ -167,13 +167,13 @@ class DQN_Agent():
 		self.env = environment_name
 		self.render = render
 
-		self.nS = 4	# For CartPole-v0
-		self.nA = 2
-		self.gamma = 0.99
+		# self.nS = 4	# For CartPole-v0
+		# self.nA = 2
+		# self.gamma = 0.99
 
-		# self.nS = 2	 # For MountainCar-v0
-		# self.nA = 3
-		# self.gamma = 1.0
+		self.nS = 2	 # For MountainCar-v0
+		self.nA = 3
+		self.gamma = 1.0
 		
 		self.net = QNetwork(self.env, sess, self.nS, self.nA)
 
@@ -232,7 +232,7 @@ class DQN_Agent():
 		# tf.reset_default_graph()
 
 		# TODO: Set this value to True if using experience replay
-		exp_replay = True
+		exp_replay = False
 
 		sess.run(tf.global_variables_initializer())
 		global train_op, W, output, features, act, labels, features_, loss, writer, merged, weights, loss_weights
@@ -246,7 +246,8 @@ class DQN_Agent():
 		qFunc_per_episode = []
 
 		# Burn in memory
-		self.burn_in_memory(sess)
+		if exp_replay:
+			self.burn_in_memory(sess)
 		
 		############################### LOAD MODEL ###########################
 
@@ -273,20 +274,20 @@ class DQN_Agent():
 				
 				if isTerminal:
 
-					# target_ = np.zeros((self.nA, 1))
-					# target_[currentAction,0] = target
-					# loss_weights_ = np.zeros((self.nA, 1))
-					# loss_weights_[currentAction,0] = 1.0
-					# xCurrent = np.reshape(xCurrent, (self.nS,1))
-					# target_ = np.reshape(target_, (1,self.nA))
-					# loss_weights_ = np.reshape(loss_weights_, (1,self.nA))
+					target_ = np.zeros((self.nA, 1))
+					target_[currentAction,0] = target
+					loss_weights_ = np.zeros((self.nA, 1))
+					loss_weights_[currentAction,0] = 1.0
+					xCurrent = np.reshape(xCurrent, (self.nS,1))
+					target_ = np.reshape(target_, (1,self.nA))
+					loss_weights_ = np.reshape(loss_weights_, (1,self.nA))
 					xCurrent = np.reshape(xCurrent, (self.nS,1))
 
 					target = reward
 
 					target = np.reshape(target, (1,1))
 					# _, wCurrent, act_qFuncCurrent, loss_ = sess.run([train_op, W, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
-					_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target})
+					_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target, loss_weights:loss_weights_})
 					total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0, currentAction]
 					# print('Q per episode: %f' % total_qFuncCurrent)
 					# print('******* EPISODE TERMINATED *******')
@@ -308,15 +309,15 @@ class DQN_Agent():
 				# else:
 				# reward = reward
 				target = reward + gamma * act_qFuncOld # r + gamma*Q(S', A', w-)
-				# target_ = np.zeros((self.nA, 1))
-				# target_[currentAction,0] = target
-				# loss_weights_ = np.zeros((self.nA, 1))
-				# loss_weights_[currentAction,0] = 1.0
+				target_ = np.zeros((self.nA, 1))
+				target_[currentAction,0] = target
+				loss_weights_ = np.zeros((self.nA, 1))
+				loss_weights_[currentAction,0] = 1.0
 				xCurrent = np.reshape(xCurrent, (self.nS,1))
 				target = np.reshape(target, (1,1))
-				# loss_weights_ = np.reshape(loss_weights_, (1,self.nA))
+				loss_weights_ = np.reshape(loss_weights_, (1,self.nA))
 				# _, wCurrent, act_qFuncCurrent, loss_ = sess.run([train_op, W, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
-				_, qFuncCurrent, loss_, summary, = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target})
+				_, qFuncCurrent, loss_, summary, = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target, loss_weights:loss_weights_})
 				
 				# with tf.variable_scope("foo", reuse = tf.AUTO_REUSE):
 				# 	weights = tf.get_variable("output/kernel:0", [2,3])
