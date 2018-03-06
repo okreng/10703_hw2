@@ -173,13 +173,13 @@ class DQN_Agent():
 		self.env = environment_name
 		self.render = render
 
-		self.nS = 4	# For CartPole-v0
-		self.nA = 2
-		self.gamma = 0.99
+		# self.nS = 4	# For CartPole-v0
+		# self.nA = 2
+		# self.gamma = 0.99
 
-		# self.nS = 2	 # For MountainCar-v0
-		# self.nA = 3
-		# self.gamma = 1.0
+		self.nS = 2	 # For MountainCar-v0
+		self.nA = 3
+		self.gamma = 1.0
 		
 		self.net = QNetwork(self.env, sess, self.nS, self.nA)
 
@@ -188,7 +188,7 @@ class DQN_Agent():
 		self.replay_memory = Replay_Memory(self.memory_size, self.burn_size)
 
 		self.max_iterations = 200
-		self.max_episodes = 501
+		self.max_episodes = 5001
 		self.epsilon = 0.5 
 
 		self.updateWeightIter = 100  # Another random number for now
@@ -296,7 +296,10 @@ class DQN_Agent():
 					xCurrent = np.reshape(xCurrent, (-1,self.nS))
 
 					# _, wCurrent, act_qFuncCurrent, loss_ = sess.run([train_op, W, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
+					# if (not exp_replay):
 					_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
+					# else:
+					#	qFuncCurrent, loss_, = sess.run([output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
 					total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0, currentAction]
 					# print('Q per episode: %f' % total_qFuncCurrent)
 					# print('******* EPISODE TERMINATED *******')
@@ -331,8 +334,11 @@ class DQN_Agent():
 				target = np.reshape(target, (1,1))
 				loss_weights_ = np.reshape(loss_weights_, (-1,self.nA))
 				# _, wCurrent, act_qFuncCurrent, loss_ = sess.run([train_op, W, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
-				_, qFuncCurrent, loss_, summary, = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
-				
+				# if not exp_replay:
+				_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_: xCurrent, act: currentAction, labels: target_, loss_weights: loss_weights_})
+				#_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
+				# else:
+				# 	qFuncCurrent = sess.run([output], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
 				# with tf.variable_scope("foo", reuse = tf.AUTO_REUSE):
 				# 	weights = tf.get_variable("output/kernel:0", [2,3])
 				# print(tf.trainable_variables())
@@ -384,7 +390,7 @@ class DQN_Agent():
 					# print(r_targ)
 					# print(loss_weights_)
 					# input('wait')
-					sess.run([], feed_dict={features_: x_batch, act: a_batch, labels: r_targ, loss_weights: loss_weights_})
+					_, qFuncCurrent, loss_, _ = sess.run([train_op, output, loss, merged], feed_dict={features_: x_batch, act: a_batch, labels: r_targ, loss_weights: loss_weights_})
 
 				# Appending to replay memory
 				if len(self.replay_memory.get_memory()) == self.memory_size:
