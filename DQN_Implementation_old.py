@@ -4,7 +4,6 @@ import random
 import time
 import matplotlib.pyplot as plt
 import os
-from datetime import datetime
 
 class QNetwork():
 
@@ -43,24 +42,13 @@ class QNetwork():
 		# Dense Layer
 		# dense = tf.layers.dense(inputs = input_layer, units = nS, activation = None, name = 'dense')
 		dense1 = tf.layers.dense(inputs = input_layer, units = 64, activation = tf.nn.relu, name = 'dense1', use_bias=True)
-
-		dense2 = tf.layers.dense(inputs = dense1, units = 32, activation = tf.nn.relu, name='value_dense2', use_bias=True)
-		dense3 = tf.layers.dense(inputs = dense2, units = 16, activation = tf.nn.relu, name='value_dense3', use_bias=True)
-
-		dense4 = tf.layers.dense(inputs = dense1, units = 32, activation = tf.nn.relu, name='adv_dense4', use_bias=True)
-		dense5 = tf.layers.dense(inputs = dense4, units = 16, activation = tf.nn.relu, name='adv_dense5', use_bias=True)
+		dense2 = tf.layers.dense(inputs = dense1, units = 32, activation = tf.nn.relu, name='dense2', use_bias=True)
+		dense3 = tf.layers.dense(inputs = dense2, units = 16, activation = tf.nn.relu, name='dense3', use_bias=True)
 		# dense4 = tf.layers.dense(inputs=dense3, units=256, activation=tf.nn.relu, name='dense4', use_bias=True)
 
 		# Output Layer
-		output_v = tf.layers.dense(inputs=dense3, units=nA, name='output_v')
-		output_a = tf.layers.dense(inputs=dense5, units=nA, name='output_a')
-		avg_a = tf.reduce_mean(input_tensor=output_a)
-
-		unbiased_a = tf.subtract(output_a, avg_a)
-
-		output = tf.add(output_v, unbiased_a, name='output')
-
-		# output = tf.layers.dense(inputs=dense3, units=nA, name='output')
+		output = tf.layers.dense(inputs = dense3, units = nA, name = 'output')
+		
 		#####################
 
 		# predict = output[0, act]
@@ -74,8 +62,9 @@ class QNetwork():
 		optimizer = tf.train.AdamOptimizer(learning_rate=0.0001)
 
 		train_op = optimizer.minimize(loss = loss, global_step = tf.train.get_global_step())
-
-		self.saver = tf.train.Saver(max_to_keep=1000000)
+		
+		# TODO: NOT SURE IF THIS NEEDS TO BE EXPLICITLY SAVED OR NOT
+		self.saver = tf.train.Saver(max_to_keep=0)
 		
 		tf.summary.scalar('loss', loss)
 		# tf.summary.scalar('output', output)
@@ -111,8 +100,8 @@ class QNetwork():
 		ckpt = tf.train.get_checkpoint_state('./save/')
 
 		if ckpt and ckpt.model_checkpoint_path:
-			print("Loading model: ", ckpt.all_model_checkpoint_paths[int(model_file/500)])
-			self.saver.restore(sess, ckpt.all_model_checkpoint_paths[int(model_file/500)])
+			print("Loading model: ", ckpt.all_model_checkpoint_paths[int(model_file/500)-3])
+			self.saver.restore(sess, ckpt.all_model_checkpoint_paths[int(model_file/500)-3])
 			# for v in tf.global_variables():
 			# 	print(v.name)
 		else:
@@ -199,14 +188,12 @@ class DQN_Agent():
 		self.replay_memory = Replay_Memory(self.memory_size, self.burn_size)
 
 		self.max_iterations = 200
-		self.max_episodes = 3501
-		self.epsilon = 0.5
+		self.max_episodes = 5001
+		self.epsilon = 0.5 
 
 		self.updateWeightIter = 100  # Another random number for now
 
 		self.alpha = 0.0001
-
-		self.plot = False
 
 		return
 
@@ -222,10 +209,8 @@ class DQN_Agent():
 			eps = eps/((epi_number/(self.max_episodes/10)) + 1)
 		else:
 			eps = 0
-
-		# eps = eps/((epi_number/(self.max_episodes/10)) + 1)
-
-		nextAction = np.argmax(q_values)
+		
+		nextAction = np.argmax(q_values)			
 
 		if prob < eps/num_actions:
 			while True:
@@ -255,9 +240,6 @@ class DQN_Agent():
 		# TODO: Set this value to True if using experience replay
 		exp_replay = True
 
-		totalUpdates = 0
-		numUpdates = 0
-
 		sess.run(tf.global_variables_initializer())
 		global train_op, W, output, features, act, labels, features_, loss, writer, merged, weights, loss_weights
 
@@ -275,32 +257,12 @@ class DQN_Agent():
 		
 		############################### LOAD MODEL ###########################
 
-		# self.net.load_model(sess, 2000)
+		# self.net.load_model(sess, 500)
 
 		######################################################################
 
 		for epi_no in range(self.max_episodes):
-			# print('Episode Number: %d' % epi_no)
-			
-			if self.plot:
-				numUpdates += 1
-				if numUpdates == 20:
-					plt.figure()
-					plt.plot(reward_per_episode)
-					# timestr = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-					# save_path = '../plots/'+env+'/Dueling/'+ str(timestr) + '.png'
-					save_path = './plots/Dueling'+str(epi_no)+'.png'
-					# save_path = os.rename("text.png", time.strftime("%d%H%M%S.png"))
-					print("Plot saved to {}".format(save_path))
-					plt.savefig(save_path)
-
-					self.plot = False
-					numUpdates = 0
-
-				else:
-					reward_per_episode.append(-iter_no)  # For MountainCar
-					# reward_per_episode.append(iter_no)  # For CartPole
-
+			print('Episode Number: %d' % epi_no)
 			total_qFuncCurrent = 0
 			
 			# Random start-action pair right
@@ -318,17 +280,9 @@ class DQN_Agent():
 
 			for iter_no in range(self.max_iterations):
 				# print('Iteration Number: %d' % iter_no)
-
-				totalUpdates += 1
-
-				if totalUpdates % 10000 == 0:
-					numUpdates = 0
-					self.plot = True
-					reward_per_episode = []
-
 				
-				# if isTerminal:
-				if nextState[0] >= 0.5:
+				if isTerminal:
+				# if nextState[0] >= 0.5:
 					target = reward
 					currentAction = np.reshape(currentAction, (-1))
 					target_ = np.zeros((1, self.nA))
@@ -343,19 +297,12 @@ class DQN_Agent():
 
 					# _, wCurrent, act_qFuncCurrent, loss_ = sess.run([train_op, W, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
 					# if (not exp_replay):
-					# totalUpdates += 1
-					# numUpdates += 1
 					_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
 					# else:
 					#	qFuncCurrent, loss_, = sess.run([output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
 					total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0, currentAction]
 					# print('Q per episode: %f' % total_qFuncCurrent)
 					# print('******* EPISODE TERMINATED *******')
-					print("episode: {}/{}, score: {}".format(epi_no, self.max_episodes, iter_no))
-					steps_per_episode.append(iter_no)
-					qFunc_per_episode.append(total_qFuncCurrent)
-					break
-				elif isTerminal:
 					print("episode: {}/{}, score: {}".format(epi_no, self.max_episodes, iter_no))
 					steps_per_episode.append(iter_no)
 					qFunc_per_episode.append(total_qFuncCurrent)
@@ -388,8 +335,6 @@ class DQN_Agent():
 				loss_weights_ = np.reshape(loss_weights_, (-1,self.nA))
 				# _, wCurrent, act_qFuncCurrent, loss_ = sess.run([train_op, W, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
 				# if not exp_replay:
-				# totalUpdates += 1
-				# numUpdates += 1
 				_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_: xCurrent, act: currentAction, labels: target_, loss_weights: loss_weights_})
 				#_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
 				# else:
@@ -445,8 +390,6 @@ class DQN_Agent():
 					# print(r_targ)
 					# print(loss_weights_)
 					# input('wait')
-					# totalUpdates += 1
-					# numUpdates += 1
 					_, qFuncCurrent, loss_, _ = sess.run([train_op, output, loss, merged], feed_dict={features_: x_batch, act: a_batch, labels: r_targ, loss_weights: loss_weights_})
 
 				# Appending to replay memory
@@ -481,18 +424,11 @@ class DQN_Agent():
 
 		plt.figure(1)
 		plt.plot(steps_per_episode)
-
-		save_path = './plots/Dueling_final_steps.png'
-		print("Plot saved to {}".format(save_path))
-		plt.savefig(save_path)
 		
 		plt.figure(2)
 		plt.plot(qFunc_per_episode)
-
-		save_path = './plots/Dueling_final_steps.png'
-		print("Plot saved to {}".format(save_path))
-		plt.savefig(save_path)
-		# plt.show()
+		
+		plt.show()
 		return
 
 	def test(self, sess, model_file=None):
@@ -634,8 +570,7 @@ def parse_arguments():
 def main(args):
 
 	args = parse_arguments()
-	#environment_name = args.env
-	environment_name = 'MountainCar-v0'
+	environment_name = args.env
 	render = False # args.render
 	print('Master branch')
 	# Setting the session to allow growth, so it doesn't allocate all GPU memory. 
@@ -660,9 +595,10 @@ def main(args):
 	# W = tf.Variable(tf.random_uniform([4,2], 0, 0.01))
 	
 	agent = DQN_Agent(env, sess, render)
-	agent.train(sess)
+	agent.test(sess)
 	# agent.test(sess)
 	writer.close()
 
 if __name__ == '__main__':
 	main(sys.argv)
+
