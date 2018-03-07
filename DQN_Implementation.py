@@ -42,13 +42,23 @@ class QNetwork():
 		# Dense Layer
 		# dense = tf.layers.dense(inputs = input_layer, units = nS, activation = None, name = 'dense')
 		dense1 = tf.layers.dense(inputs = input_layer, units = 64, activation = tf.nn.relu, name = 'dense1', use_bias=True)
-		dense2 = tf.layers.dense(inputs = dense1, units = 32, activation = tf.nn.relu, name='dense2', use_bias=True)
-		dense3 = tf.layers.dense(inputs = dense2, units = 16, activation = tf.nn.relu, name='dense3', use_bias=True)
+
+		dense2 = tf.layers.dense(inputs = dense1, units = 32, activation = tf.nn.relu, name='value_dense2', use_bias=True)
+		dense3 = tf.layers.dense(inputs = dense2, units = 16, activation = tf.nn.relu, name='value_dense3', use_bias=True)
+
+		dense4 = tf.layers.dense(inputs = dense1, units = 32, activation = tf.nn.relu, name='adv_dense4', use_bias=True)
+		dense5 = tf.layers.dense(inputs = dense4, units = 16, activation = tf.nn.relu, name='adv_dense5', use_bias=True)
 		# dense4 = tf.layers.dense(inputs=dense3, units=256, activation=tf.nn.relu, name='dense4', use_bias=True)
 
 		# Output Layer
-		output = tf.layers.dense(inputs = dense3, units = nA, name = 'output')
-		
+		output_v = tf.layers.dense(inputs=dense3, units=nA, name='output_v')
+		output_a = tf.layers.dense(inputs=dense5, units=nA, name='output_a')
+		# avg_a = tf.layers.average_pooling1d(inputs=tf.reshape(output_a, [nA,1,1]), pool_size=nA, strides=1, name='ave_pool')
+		avg_a = tf.reduce_mean(input_tensor=output_a)
+
+		unbiased_a = tf.subtract(output_a, avg_a)
+
+		output = tf.add(output_v, unbiased_a, name='output')
 		#####################
 
 		# predict = output[0, act]
@@ -62,9 +72,8 @@ class QNetwork():
 		optimizer = tf.train.AdamOptimizer(learning_rate=0.0001)
 
 		train_op = optimizer.minimize(loss = loss, global_step = tf.train.get_global_step())
-		
-		# TODO: NOT SURE IF THIS NEEDS TO BE EXPLICITLY SAVED OR NOT
-		self.saver = tf.train.Saver(max_to_keep=0)
+
+		self.saver = tf.train.Saver(max_to_keep=1000000)
 		
 		tf.summary.scalar('loss', loss)
 		# tf.summary.scalar('output', output)
@@ -100,8 +109,8 @@ class QNetwork():
 		ckpt = tf.train.get_checkpoint_state('./save/')
 
 		if ckpt and ckpt.model_checkpoint_path:
-			print("Loading model: ", ckpt.all_model_checkpoint_paths[int(model_file/500)-3])
-			self.saver.restore(sess, ckpt.all_model_checkpoint_paths[int(model_file/500)-3])
+			print("Loading model: ", ckpt.all_model_checkpoint_paths[int(model_file/500)])
+			self.saver.restore(sess, ckpt.all_model_checkpoint_paths[int(model_file/500)])
 			# for v in tf.global_variables():
 			# 	print(v.name)
 		else:
@@ -238,7 +247,10 @@ class DQN_Agent():
 		# tf.reset_default_graph()
 
 		# TODO: Set this value to True if using experience replay
-		exp_replay = True
+		exp_replay = False
+
+		totalUpdates = 0
+		numUpdates = 0
 
 		sess.run(tf.global_variables_initializer())
 		global train_op, W, output, features, act, labels, features_, loss, writer, merged, weights, loss_weights
@@ -257,7 +269,7 @@ class DQN_Agent():
 		
 		############################### LOAD MODEL ###########################
 
-		# self.net.load_model(sess, 500)
+		# self.net.load_model(sess, 2000)
 
 		######################################################################
 
@@ -280,6 +292,11 @@ class DQN_Agent():
 
 			for iter_no in range(self.max_iterations):
 				# print('Iteration Number: %d' % iter_no)
+
+				if numUpdates > 500:
+					numUpdates = 0
+					# performancePlot(totalUpdates)
+
 				
 				if isTerminal:
 				# if nextState[0] >= 0.5:
@@ -297,6 +314,8 @@ class DQN_Agent():
 
 					# _, wCurrent, act_qFuncCurrent, loss_ = sess.run([train_op, W, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
 					# if (not exp_replay):
+					totalUpdates += 1
+					numUpdates += 1
 					_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
 					# else:
 					#	qFuncCurrent, loss_, = sess.run([output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
@@ -335,6 +354,8 @@ class DQN_Agent():
 				loss_weights_ = np.reshape(loss_weights_, (-1,self.nA))
 				# _, wCurrent, act_qFuncCurrent, loss_ = sess.run([train_op, W, output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target})
 				# if not exp_replay:
+				totalUpdates += 1
+				numUpdates += 1
 				_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_: xCurrent, act: currentAction, labels: target_, loss_weights: loss_weights_})
 				#_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
 				# else:
@@ -390,6 +411,8 @@ class DQN_Agent():
 					# print(r_targ)
 					# print(loss_weights_)
 					# input('wait')
+					totalUpdates += 1
+					numUpdates += 1
 					_, qFuncCurrent, loss_, _ = sess.run([train_op, output, loss, merged], feed_dict={features_: x_batch, act: a_batch, labels: r_targ, loss_weights: loss_weights_})
 
 				# Appending to replay memory
@@ -595,7 +618,7 @@ def main(args):
 	# W = tf.Variable(tf.random_uniform([4,2], 0, 0.01))
 	
 	agent = DQN_Agent(env, sess, render)
-	agent.test(sess)
+	agent.train(sess)
 	# agent.test(sess)
 	writer.close()
 
