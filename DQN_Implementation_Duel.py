@@ -54,12 +54,13 @@ class QNetwork():
 		# Output Layer
 		output_v = tf.layers.dense(inputs=dense3, units=nA, name='output_v')
 		output_a = tf.layers.dense(inputs=dense5, units=nA, name='output_a')
-		# avg_a = tf.layers.average_pooling1d(inputs=tf.reshape(output_a, [nA,1,1]), pool_size=nA, strides=1, name='ave_pool')
 		avg_a = tf.reduce_mean(input_tensor=output_a)
 
 		unbiased_a = tf.subtract(output_a, avg_a)
 
 		output = tf.add(output_v, unbiased_a, name='output')
+
+		# output = tf.layers.dense(inputs=dense3, units=nA, name='output')
 		#####################
 
 		# predict = output[0, act]
@@ -183,13 +184,13 @@ class DQN_Agent():
 		self.env = environment_name
 		self.render = render
 
-		self.nS = 4	# For CartPole-v0
-		self.nA = 2
-		self.gamma = 0.99
+		# self.nS = 4	# For CartPole-v0
+		# self.nA = 2
+		# self.gamma = 0.99
 
-		# self.nS = 2	 # For MountainCar-v0
-		# self.nA = 3
-		# self.gamma = 1.0
+		self.nS = 2	 # For MountainCar-v0
+		self.nA = 3
+		self.gamma = 1.0
 		
 		self.net = QNetwork(self.env, sess, self.nS, self.nA)
 
@@ -198,8 +199,8 @@ class DQN_Agent():
 		self.replay_memory = Replay_Memory(self.memory_size, self.burn_size)
 
 		self.max_iterations = 200
-		self.max_episodes = 5001
-		self.epsilon = 0.5 
+		self.max_episodes = 3501
+		self.epsilon = 0.5
 
 		self.updateWeightIter = 100  # Another random number for now
 
@@ -252,7 +253,7 @@ class DQN_Agent():
 		# tf.reset_default_graph()
 
 		# TODO: Set this value to True if using experience replay
-		exp_replay = False
+		exp_replay = True
 
 		totalUpdates = 0
 		numUpdates = 0
@@ -297,8 +298,8 @@ class DQN_Agent():
 					numUpdates = 0
 
 				else:
-					reward_per_episode.append(-iter_no)  # For CartPole
-					# reward_per_episode.append(iter_no)  # For MountainCar
+					reward_per_episode.append(-iter_no)  # For MountainCar
+					# reward_per_episode.append(iter_no)  # For CartPole
 
 			total_qFuncCurrent = 0
 			
@@ -326,8 +327,8 @@ class DQN_Agent():
 					reward_per_episode = []
 
 				
-				if isTerminal:
-				# if nextState[0] >= 0.5:
+				# if isTerminal:
+				if nextState[0] >= 0.5:
 					target = reward
 					currentAction = np.reshape(currentAction, (-1))
 					target_ = np.zeros((1, self.nA))
@@ -350,6 +351,11 @@ class DQN_Agent():
 					total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0, currentAction]
 					# print('Q per episode: %f' % total_qFuncCurrent)
 					# print('******* EPISODE TERMINATED *******')
+					print("episode: {}/{}, score: {}".format(epi_no, self.max_episodes, iter_no))
+					steps_per_episode.append(iter_no)
+					qFunc_per_episode.append(total_qFuncCurrent)
+					break
+				elif isTerminal:
 					print("episode: {}/{}, score: {}".format(epi_no, self.max_episodes, iter_no))
 					steps_per_episode.append(iter_no)
 					qFunc_per_episode.append(total_qFuncCurrent)
@@ -478,8 +484,11 @@ class DQN_Agent():
 		
 		plt.figure(2)
 		plt.plot(qFunc_per_episode)
-		
-		plt.show()
+
+		save_path = './plots/Dueling_final_steps.png'
+		print("Plot saved to {}".format(save_path))
+		plt.savefig(save_path)
+		# plt.show()
 		return
 
 	def test(self, sess, model_file=None):
@@ -621,7 +630,8 @@ def parse_arguments():
 def main(args):
 
 	args = parse_arguments()
-	environment_name = args.env
+	#environment_name = args.env
+	environment_name = 'MountainCar-v0'
 	render = False # args.render
 	print('Master branch')
 	# Setting the session to allow growth, so it doesn't allocate all GPU memory. 
