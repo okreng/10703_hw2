@@ -109,7 +109,6 @@ class QNetwork():
 		# Helper function to load an existing model.m 
 
 		ckpt = tf.train.get_checkpoint_state('../save/')
-		print(ckpt.all_model_checkpoint_paths)
 		if ckpt and ckpt.model_checkpoint_path:
 			print("Loading model: ", ckpt.all_model_checkpoint_paths[int(model_file/500)])
 			self.saver.restore(sess, ckpt.all_model_checkpoint_paths[int(model_file/500)])
@@ -199,7 +198,7 @@ class DQN_Agent():
 		self.replay_memory = Replay_Memory(self.memory_size, self.burn_size)
 
 		self.max_iterations = 200
-		self.max_episodes = 3501
+		self.max_episodes = 15001
 		self.epsilon = 0.8
 
 		self.updateWeightIter = 100  # Another random number for now
@@ -253,7 +252,7 @@ class DQN_Agent():
 		# tf.reset_default_graph()
 
 		# TODO: Set this value to True if using experience replay
-		exp_replay = False
+		exp_replay = True
 
 		totalUpdates = 0
 		numUpdates = 0
@@ -348,7 +347,8 @@ class DQN_Agent():
 					_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
 					# else:
 					#	qFuncCurrent, loss_, = sess.run([output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
-					total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0, currentAction]
+					qFuncCurrent = np.reshape(qFuncCurrent, (-1, self.nA))
+					total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0][currentAction[0]]
 					# print('Q per episode: %f' % total_qFuncCurrent)
 					# print('******* EPISODE TERMINATED *******')
 					print("episode: {}/{}, score: {}".format(epi_no, self.max_episodes, iter_no))
@@ -390,7 +390,7 @@ class DQN_Agent():
 				# if not exp_replay:
 				# totalUpdates += 1
 				# numUpdates += 1
-				_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_: xCurrent, act: currentAction, labels: target_, loss_weights: loss_weights_})
+				qFuncCurrent= sess.run([output], feed_dict={features_: xCurrent})
 				#_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
 				# else:
 				# 	qFuncCurrent = sess.run([output], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
@@ -398,7 +398,8 @@ class DQN_Agent():
 				# 	weights = tf.get_variable("output/kernel:0", [2,3])
 				# print(tf.trainable_variables())
 				# weights = [v for v in tf.trainable_variables() if v.name == "output/kernel:0"]
-				total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0, currentAction]
+				qFuncCurrent = np.reshape(qFuncCurrent, (-1, self.nA))
+				total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0][currentAction[0]]
 				# print('Loss: %f' % loss_)
 				transition = [xCurrent, currentAction, reward, xNext, isTerminal]
 				xCurrent = xNext
@@ -475,12 +476,15 @@ class DQN_Agent():
 
 			###################################################
 		
-			writer.add_summary(summary, iter_no + (epi_no * self.max_iterations))
+			# writer.add_summary(summary, iter_no + (epi_no * self.max_iterations))
 		
 		writer.close()
 
 		plt.figure(1)
 		plt.plot(steps_per_episode)
+		save_path = './plots/Dueling_final_steps_per_episode.png'
+		print("Plot saved to {}".format(save_path))
+		plt.savefig(save_path)
 		
 		plt.figure(2)
 		plt.plot(qFunc_per_episode)
@@ -508,12 +512,12 @@ class DQN_Agent():
 
 		############################### LOAD MODEL ###########################
 
-		self.net.load_model(sess, 15000)
+		self.net.load_model(sess, 27500)
 
 		######################################################################
 
-		for epi_no in range(1000):
-			print('Episode Number: %d' % epi_no)
+		for epi_no in range(100):
+			# print('Episode Number: %d' % epi_no)
 			total_qFuncCurrent = 0
 			
 			# Random start-action pair right
@@ -525,7 +529,7 @@ class DQN_Agent():
 			xNext = nextState # A' , generate feature space from nextState
 
 			for iter_no in range(self.max_iterations):
-				print('Iteration Number: %d' % iter_no)
+				# print('Iteration Number: %d' % iter_no)
 				
 				if isTerminal:
 					target = reward
@@ -540,7 +544,7 @@ class DQN_Agent():
 					qFuncCurrent = np.reshape(qFuncCurrent, (-1, self.nA))
 					total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0][currentAction[0]]
 					# print('Q per episode: %f' % total_qFuncCurrent)
-					print('******* EPISODE TERMINATED *******')
+					print("episode: {}/{}, score: {}".format(epi_no, 100, iter_no))
 					steps_per_episode.append(iter_no)
 					qFunc_per_episode.append(total_qFuncCurrent)
 					break
@@ -585,13 +589,16 @@ class DQN_Agent():
 		
 		writer.close()
 
+		print(np.sum(steps_per_episode)/100)
+
 		plt.figure(1)
 		plt.plot(steps_per_episode)
 		
 		plt.figure(2)
 		plt.plot(qFunc_per_episode)
-		
+
 		plt.show()
+
 		return
 
 	def burn_in_memory(self, sess):
@@ -658,8 +665,8 @@ def main(args):
 	# W = tf.Variable(tf.random_uniform([4,2], 0, 0.01))
 	
 	agent = DQN_Agent(env, sess, render)
-	# agent.train(sess)
-	agent.test(sess)
+	agent.train(sess)
+	# agent.test(sess)
 	writer.close()
 
 if __name__ == '__main__':
