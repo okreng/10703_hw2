@@ -44,23 +44,23 @@ class QNetwork():
 		# dense = tf.layers.dense(inputs = input_layer, units = nS, activation = None, name = 'dense')
 		dense1 = tf.layers.dense(inputs = input_layer, units = 64, activation = tf.nn.relu, name = 'dense1', use_bias=True)
 
-		dense2 = tf.layers.dense(inputs = dense1, units = 32, activation = tf.nn.relu, name='value_dense2', use_bias=True)
-		dense3 = tf.layers.dense(inputs = dense2, units = 16, activation = tf.nn.relu, name='value_dense3', use_bias=True)
+		# dense2 = tf.layers.dense(inputs = dense1, units = 32, activation = tf.nn.relu, name='value_dense2', use_bias=True)
+		# dense3 = tf.layers.dense(inputs = dense2, units = 16, activation = tf.nn.relu, name='value_dense3', use_bias=True)
 
-		dense4 = tf.layers.dense(inputs = dense1, units = 32, activation = tf.nn.relu, name='adv_dense4', use_bias=True)
-		dense5 = tf.layers.dense(inputs = dense4, units = 16, activation = tf.nn.relu, name='adv_dense5', use_bias=True)
+		# dense4 = tf.layers.dense(inputs = dense1, units = 32, activation = tf.nn.relu, name='adv_dense4', use_bias=True)
+		# dense5 = tf.layers.dense(inputs = dense4, units = 16, activation = tf.nn.relu, name='adv_dense5', use_bias=True)
 		# dense4 = tf.layers.dense(inputs=dense3, units=256, activation=tf.nn.relu, name='dense4', use_bias=True)
 
 		# Output Layer
-		output_v = tf.layers.dense(inputs=dense3, units=nA, name='output_v')
-		output_a = tf.layers.dense(inputs=dense5, units=nA, name='output_a')
-		avg_a = tf.reduce_mean(input_tensor=output_a)
+		# output_v = tf.layers.dense(inputs=dense3, units=nA, name='output_v')
+		# output_a = tf.layers.dense(inputs=dense5, units=nA, name='output_a')
+		# avg_a = tf.reduce_mean(input_tensor=output_a)
+        #
+		# unbiased_a = tf.subtract(output_a, avg_a)
+        #
+		# output = tf.add(output_v, unbiased_a, name='output')
 
-		unbiased_a = tf.subtract(output_a, avg_a)
-
-		output = tf.add(output_v, unbiased_a, name='output')
-
-		# output = tf.layers.dense(inputs=dense3, units=nA, name='output')
+		output = tf.layers.dense(inputs=dense1, units=nA, name='output')
 		#####################
 
 		# predict = output[0, act]
@@ -108,8 +108,8 @@ class QNetwork():
 	def load_model(self, sess, model_file):
 		# Helper function to load an existing model.m 
 
-		ckpt = tf.train.get_checkpoint_state('./save/')
-
+		ckpt = tf.train.get_checkpoint_state('../save/')
+		print(ckpt.all_model_checkpoint_paths)
 		if ckpt and ckpt.model_checkpoint_path:
 			print("Loading model: ", ckpt.all_model_checkpoint_paths[int(model_file/500)])
 			self.saver.restore(sess, ckpt.all_model_checkpoint_paths[int(model_file/500)])
@@ -184,13 +184,13 @@ class DQN_Agent():
 		self.env = environment_name
 		self.render = render
 
-		# self.nS = 4	# For CartPole-v0
-		# self.nA = 2
-		# self.gamma = 0.99
+		self.nS = 4	 # For CartPole-v0
+		self.nA = 2
+		self.gamma = 0.99
 
-		self.nS = 2	 # For MountainCar-v0
-		self.nA = 3
-		self.gamma = 1.0
+		# self.nS = 2	 # For MountainCar-v0
+		# self.nA = 3
+		# self.gamma = 1.0
 		
 		self.net = QNetwork(self.env, sess, self.nS, self.nA)
 
@@ -200,7 +200,7 @@ class DQN_Agent():
 
 		self.max_iterations = 200
 		self.max_episodes = 3501
-		self.epsilon = 0.5
+		self.epsilon = 0.8
 
 		self.updateWeightIter = 100  # Another random number for now
 
@@ -253,7 +253,7 @@ class DQN_Agent():
 		# tf.reset_default_graph()
 
 		# TODO: Set this value to True if using experience replay
-		exp_replay = True
+		exp_replay = False
 
 		totalUpdates = 0
 		numUpdates = 0
@@ -508,11 +508,11 @@ class DQN_Agent():
 
 		############################### LOAD MODEL ###########################
 
-		self.net.load_model(sess, 3500)
+		self.net.load_model(sess, 15000)
 
 		######################################################################
 
-		for epi_no in range(100):
+		for epi_no in range(1000):
 			print('Episode Number: %d' % epi_no)
 			total_qFuncCurrent = 0
 			
@@ -536,8 +536,9 @@ class DQN_Agent():
 					loss_weights_ = np.zeros((self.nA, 1))
 					loss_weights_[currentAction, 0] = 1.0
 					loss_weights_ = np.reshape(loss_weights_, (-1, self.nA))
-					_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
-					total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0, currentAction]
+					qFuncCurrent = sess.run([output], feed_dict={features_:xCurrent})
+					qFuncCurrent = np.reshape(qFuncCurrent, (-1, self.nA))
+					total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0][currentAction[0]]
 					# print('Q per episode: %f' % total_qFuncCurrent)
 					print('******* EPISODE TERMINATED *******')
 					steps_per_episode.append(iter_no)
@@ -559,9 +560,11 @@ class DQN_Agent():
 
 				target_ = np.zeros((1, self.nA))
 				target_[0, currentAction] = target
-				_, qFuncCurrent, loss_, summary, = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
-				
-				total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0, currentAction]
+				qFuncCurrent = sess.run([output], feed_dict={features_:xCurrent})
+				# print(currentAction[0])
+				# print(qFuncCurrent)
+				qFuncCurrent = np.reshape(qFuncCurrent, (-1, self.nA))
+				total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0][currentAction[0]]
 				# print('Loss: %f' % loss_)
 				xCurrent = xNext
 				currentAction = nextAction
@@ -578,7 +581,7 @@ class DQN_Agent():
 
 			###################################################
 		
-			writer.add_summary(summary, iter_no + (epi_no * self.max_iterations))
+			# writer.add_summary(summary, iter_no + (epi_no * self.max_iterations))
 		
 		writer.close()
 
@@ -630,10 +633,9 @@ def parse_arguments():
 def main(args):
 
 	args = parse_arguments()
-	#environment_name = args.env
-	environment_name = 'MountainCar-v0'
+	environment_name = args.env
 	render = False # args.render
-	print('Master branch')
+	print('final_duel branch')
 	# Setting the session to allow growth, so it doesn't allocate all GPU memory. 
 	gpu_ops = tf.GPUOptions(allow_growth=True)
 	config = tf.ConfigProto(gpu_options=gpu_ops)
@@ -656,8 +658,8 @@ def main(args):
 	# W = tf.Variable(tf.random_uniform([4,2], 0, 0.01))
 	
 	agent = DQN_Agent(env, sess, render)
-	agent.train(sess)
-	# agent.test(sess)
+	# agent.train(sess)
+	agent.test(sess)
 	writer.close()
 
 if __name__ == '__main__':
