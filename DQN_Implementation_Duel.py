@@ -4,6 +4,7 @@ import random
 import time
 import matplotlib.pyplot as plt
 import os
+from sklearn import random_projection
 from datetime import datetime
 
 class QNetwork():
@@ -38,26 +39,24 @@ class QNetwork():
 		# TODO: CHECK THE MODEL SOMETHING PROBABLY WRONG!
 
 		# Input layer
-		input_layer = features # tf.reshape(features_, [-1, 1])
+		input_layer = features  # tf.reshape(features_, [-1, 1])
 
 		# Dense Layer
 		# dense = tf.layers.dense(inputs = input_layer, units = nS, activation = None, name = 'dense')
-		dense1 = tf.layers.dense(inputs = input_layer, units = 64, activation = tf.nn.relu, name = 'dense1', use_bias=True)
+		dense1 = tf.layers.dense(inputs = input_layer, units = 64, activation = None, name = 'dense1', use_bias=True)
 
-		# dense2 = tf.layers.dense(inputs = dense1, units = 32, activation = tf.nn.relu, name='value_dense2', use_bias=True)
-		# dense3 = tf.layers.dense(inputs = dense2, units = 16, activation = tf.nn.relu, name='value_dense3', use_bias=True)
+		# dense2 = tf.layers.dense(inputs = dense1, units = 32, activation = tf.nn.relu, name='dense2', use_bias=True)
+		# dense3 = tf.layers.dense(inputs = dense2, units = 16, activation = tf.nn.relu, name='dense3', use_bias=True)
 
 		# dense4 = tf.layers.dense(inputs = dense1, units = 32, activation = tf.nn.relu, name='adv_dense4', use_bias=True)
-		# dense5 = tf.layers.dense(inputs = dense4, units = 16, activation = tf.nn.relu, name='adv_dense5', use_bias=True)
+		# dense5 = tf.layers.dense(inputs = dense4, units = 32, activation = tf.nn.relu, name='adv_dense5', use_bias=True)
 		# dense4 = tf.layers.dense(inputs=dense3, units=256, activation=tf.nn.relu, name='dense4', use_bias=True)
 
 		# Output Layer
 		# output_v = tf.layers.dense(inputs=dense3, units=nA, name='output_v')
 		# output_a = tf.layers.dense(inputs=dense5, units=nA, name='output_a')
 		# avg_a = tf.reduce_mean(input_tensor=output_a)
-        #
 		# unbiased_a = tf.subtract(output_a, avg_a)
-        #
 		# output = tf.add(output_v, unbiased_a, name='output')
 
 		output = tf.layers.dense(inputs=dense1, units=nA, name='output')
@@ -99,7 +98,7 @@ class QNetwork():
 		# Helper function to save your model / weights. 
 
 		# save_path = saver.save(sess, "../save/model.ckpt")
-		checkpoint_path = os.path.join('./save/', 'model.ckpt')
+		checkpoint_path = os.path.join('./save/LinearMC/', 'model.ckpt')
 		self.saver.save(sess, checkpoint_path, global_step=epi_no)
 		print("model saved to {}".format(checkpoint_path))
 
@@ -108,7 +107,7 @@ class QNetwork():
 	def load_model(self, sess, model_file):
 		# Helper function to load an existing model.m 
 
-		ckpt = tf.train.get_checkpoint_state('../save/')
+		ckpt = tf.train.get_checkpoint_state('./important_save/LinearMC/')
 		if ckpt and ckpt.model_checkpoint_path:
 			print("Loading model: ", ckpt.all_model_checkpoint_paths[int(model_file/500)])
 			self.saver.restore(sess, ckpt.all_model_checkpoint_paths[int(model_file/500)])
@@ -183,13 +182,13 @@ class DQN_Agent():
 		self.env = environment_name
 		self.render = render
 
-		self.nS = 4	 # For CartPole-v0
-		self.nA = 2
-		self.gamma = 0.99
+		# self.nS = 4	 # For CartPole-v0
+		# self.nA = 2
+		# self.gamma = 0.99
 
-		# self.nS = 2	 # For MountainCar-v0
-		# self.nA = 3
-		# self.gamma = 1.0
+		self.nS = 2	 # For MountainCar-v0
+		self.nA = 3
+		self.gamma = 1.0
 		
 		self.net = QNetwork(self.env, sess, self.nS, self.nA)
 
@@ -198,8 +197,8 @@ class DQN_Agent():
 		self.replay_memory = Replay_Memory(self.memory_size, self.burn_size)
 
 		self.max_iterations = 200
-		self.max_episodes = 15001
-		self.epsilon = 0.8
+		self.max_episodes = 5001
+		self.epsilon = 0.0
 
 		self.updateWeightIter = 100  # Another random number for now
 
@@ -217,10 +216,10 @@ class DQN_Agent():
 		eps = self.epsilon
 		num_actions = self.nA 
 
-		if epi_number < self.max_episodes/2:
-			eps = eps/((epi_number/(self.max_episodes/10)) + 1)
-		else:
-			eps = 0
+		# if epi_number < self.max_episodes/2:
+		eps = eps/((epi_number/(self.max_episodes/10)) + 1)
+		# else:
+		# 	eps = 0
 
 		# eps = eps/((epi_number/(self.max_episodes/10)) + 1)
 
@@ -252,8 +251,9 @@ class DQN_Agent():
 		# tf.reset_default_graph()
 
 		# TODO: Set this value to True if using experience replay
-		exp_replay = True
-
+		exp_replay = False
+		# transformer = random_projection.SparseRandomProjection()
+		transformer = np.random.randn(self.nS, self.nS)
 		totalUpdates = 0
 		numUpdates = 0
 
@@ -267,14 +267,14 @@ class DQN_Agent():
 		alpha = self.alpha
 		steps_per_episode = []
 		qFunc_per_episode = []
-
+		avg_reward_per_episode = []
 		# Burn in memory
 		if exp_replay:
 			self.burn_in_memory(sess)
 		
 		############################### LOAD MODEL ###########################
 
-		# self.net.load_model(sess, 2000)
+		self.net.load_model(sess, 0)
 
 		######################################################################
 
@@ -283,16 +283,19 @@ class DQN_Agent():
 			
 			if self.plot:
 				numUpdates += 1
-				if numUpdates == 20:
+				if numUpdates == 21:
 					plt.figure()
 					plt.plot(reward_per_episode)
 					# timestr = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 					# save_path = '../plots/'+env+'/Dueling/'+ str(timestr) + '.png'
-					save_path = './plots/Dueling'+str(epi_no)+'.png'
+					save_path = './plots/LinearMC/'+str(epi_no)+'.png'
 					# save_path = os.rename("text.png", time.strftime("%d%H%M%S.png"))
 					print("Plot saved to {}".format(save_path))
 					plt.savefig(save_path)
-
+					print('Average reward')
+					avg_reward = np.sum(reward_per_episode)/20
+					avg_reward_per_episode.append(avg_reward)
+					print(avg_reward)
 					self.plot = False
 					numUpdates = 0
 
@@ -303,16 +306,20 @@ class DQN_Agent():
 			total_qFuncCurrent = 0
 			
 			# Random start-action pair right
-			currentState = env.reset()	# S
+			currentState = env.reset()  # S
 			currentAction = env.action_space.sample() # A
 			# print(currentAction)
 			# currentAction = np.reshape(currentAction, (-1))
 			# print(currentAction)
 			xCurrent = currentState
+			xCurrent = np.reshape(xCurrent, (-1,1))
+			xCurrent = np.matmul(transformer, xCurrent)
 			
 			nextState, reward, isTerminal, debugInfo = env.step(currentAction)				
 			xNext = nextState  # A' , generate feature space from nextState
-			
+			xNext = np.matmul(transformer, xNext)
+
+
 			# tf.summary.scalar('qFunc_per_episode', tf.convert_to_tensor(qFunc_per_episode))
 
 			for iter_no in range(self.max_iterations):
@@ -325,7 +332,6 @@ class DQN_Agent():
 					self.plot = True
 					reward_per_episode = []
 
-				
 				# if isTerminal:
 				if nextState[0] >= 0.5:
 					target = reward
@@ -344,7 +350,11 @@ class DQN_Agent():
 					# if (not exp_replay):
 					# totalUpdates += 1
 					# numUpdates += 1
-					_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
+					if exp_replay:
+						qFuncCurrent= sess.run([output],feed_dict={features_: xCurrent})
+
+					else:
+						_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
 					# else:
 					#	qFuncCurrent, loss_, = sess.run([output, loss], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
 					qFuncCurrent = np.reshape(qFuncCurrent, (-1, self.nA))
@@ -390,7 +400,11 @@ class DQN_Agent():
 				# if not exp_replay:
 				# totalUpdates += 1
 				# numUpdates += 1
-				qFuncCurrent= sess.run([output], feed_dict={features_: xCurrent})
+				if exp_replay:
+					qFuncCurrent = sess.run([output], feed_dict={features_: xCurrent})
+
+				else:
+					_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged],feed_dict={features_: xCurrent, act: currentAction,labels: target_, loss_weights: loss_weights_})
 				#_, qFuncCurrent, loss_, summary = sess.run([train_op, output, loss, merged], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
 				# else:
 				# 	qFuncCurrent = sess.run([output], feed_dict={features_:xCurrent, act:currentAction, labels:target_, loss_weights:loss_weights_})
@@ -406,7 +420,8 @@ class DQN_Agent():
 				currentAction = nextAction
 				nextState, reward, isTerminal, debugInfo = env.step(nextAction)				
 				xNext = nextState # generate feature space from new nextState
-
+				# xNext = transformer.fit_transform(xNext)
+				xNext = np.matmul(transformer, xNext)
 				# Perform updates in the case of experience replay
 				if exp_replay:
 					batches = 32
@@ -433,8 +448,8 @@ class DQN_Agent():
 							qFuncBatch = sess.run(output, feed_dict={features_: xp_batch})
 							a_prime = self.epsilon_greedy_policy(qFuncBatch, epi_no)
 							a_prime_feed = np.reshape(a_prime, (1))
-							out_prime = sess.run(output, feed_dict={features_: xp_batch, act: a_prime_feed})
-							r_targ[batch][action] = batch_list[batch][2] + gamma * out_prime[0, a_prime]
+							# out_prime = sess.run(output, feed_dict={features_: xp_batch, act: a_prime_feed})
+							r_targ[batch][action] = batch_list[batch][2] + gamma * qFuncBatch[0, a_prime]
 						
 					r_targ = np.reshape(r_targ, (-1, self.nA))
 					# _, qFuncCurrent, loss_, _ = sess.run([train_op, output, loss, merged], feed_dict={features_: x_batch, act: a_batch, labels: r_targ, loss_weights: loss_weights_})
@@ -482,18 +497,117 @@ class DQN_Agent():
 
 		plt.figure(1)
 		plt.plot(steps_per_episode)
-		save_path = './plots/Dueling_final_steps_per_episode.png'
+		save_path = './plots/LinearMC/final_steps_per_episode.png'
 		print("Plot saved to {}".format(save_path))
 		plt.savefig(save_path)
 		
 		plt.figure(2)
 		plt.plot(qFunc_per_episode)
 
-		save_path = './plots/Dueling_final_steps.png'
+		save_path = './plots/LinearMC/final_steps.png'
 		print("Plot saved to {}".format(save_path))
 		plt.savefig(save_path)
 		# plt.show()
 		return
+
+	def demo(self, sess, model_file=None):
+		# Run loaded model weights twenty times with greedy policy
+		# Render once
+		# Save average reward
+
+		sess.run(tf.global_variables_initializer())
+		global train_op, W, output, features, act, labels, features_, loss, writer, merged, weights, loss_weights
+
+		env = self.env
+		wIter = 0
+		updateWeightIter = self.updateWeightIter
+		gamma = self.gamma
+		alpha = self.alpha
+		# steps_per_episode = []
+		# qFunc_per_episode = []
+		rewardSum = 0
+
+		############################### LOAD MODEL ###########################
+
+		self.net.load_model(sess, 0)
+
+		######################################################################
+
+		for epi_no in range(20):
+			total_qFuncCurrent = 0
+			steps_per_episode = []
+
+			# Random start-action pair right
+			currentState = env.reset()  # S
+			currentAction = env.action_space.sample()  # A
+			xCurrent = currentState
+
+			nextState, reward, isTerminal, debugInfo = env.step(currentAction)
+			xNext = nextState  # A' , generate feature space from nextState
+
+			for iter_no in range(self.max_iterations):
+				# print('Iteration Number: %d' % iter_no)
+
+				if isTerminal:
+					target = reward
+					xCurrent = np.reshape(xCurrent, (-1, self.nS))
+					target_ = np.zeros((1, self.nA))
+					target_[0, currentAction] = target
+					currentAction = np.reshape(currentAction, (-1))
+					loss_weights_ = np.zeros((self.nA, 1))
+					loss_weights_[currentAction, 0] = 1.0
+					loss_weights_ = np.reshape(loss_weights_, (-1, self.nA))
+					qFuncCurrent = sess.run([output], feed_dict={features_: xCurrent})
+					qFuncCurrent = np.reshape(qFuncCurrent, (-1, self.nA))
+					total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0][currentAction[0]]
+					# print('Q per episode: %f' % total_qFuncCurrent)
+					print("episode: {}/{}, score: {}".format(epi_no, 100, iter_no))
+					# steps_per_episode.append(iter_no)
+					# qFunc_per_episode.append(total_qFuncCurrent)
+					break
+
+				xNext = np.reshape(xNext, (-1, self.nS))
+				qFuncOld = sess.run(output, feed_dict={features_: xNext})
+				nextAction = self.greedy_policy(qFuncOld)
+				act_qFuncOld = qFuncOld[0, nextAction]  # max(Q(S', A', w-))
+
+				currentAction = np.reshape(currentAction, (-1))
+				target = reward + gamma * act_qFuncOld  # r + gamma*Q(S', A', w-)
+				xCurrent = np.reshape(xCurrent, (-1, self.nS))
+				# target = np.reshape(target, (1,1))
+				loss_weights_ = np.zeros((self.nA, 1))
+				loss_weights_[currentAction, 0] = 1.0
+				loss_weights_ = np.reshape(loss_weights_, (-1, self.nA))
+
+				target_ = np.zeros((1, self.nA))
+				target_[0, currentAction] = target
+				qFuncCurrent = sess.run([output], feed_dict={features_: xCurrent})
+				# print(currentAction[0])
+				# print(qFuncCurrent)
+				qFuncCurrent = np.reshape(qFuncCurrent, (-1, self.nA))
+				total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0][currentAction[0]]
+				# print('Loss: %f' % loss_)
+				xCurrent = xNext
+				currentAction = nextAction
+				nextState, reward, isTerminal, debugInfo = env.step(nextAction)
+				xNext = nextState  # generate feature space from new nextState
+
+				# if epi_no == 19:
+				# 	# input("Ready_to_render")
+				# 	env.render()
+				# 	if iter_no == 0:
+				# 		time.sleep(2)
+				# 	time.sleep(0.05)
+
+			steps_per_episode.append(iter_no)
+
+			if self.nS == 2:  # Mountain Car
+				rewardSum += -iter_no
+			else:
+				rewardSum += iter_no
+
+		avgReward = rewardSum / 20
+		print("Average reward is: {}".format(avgReward))
 
 	def test(self, sess, model_file=None):
 		# Evaluate the performance of your agent over 100 episodes, by calculating cummulative rewards for the 100 episodes.
@@ -512,11 +626,11 @@ class DQN_Agent():
 
 		############################### LOAD MODEL ###########################
 
-		self.net.load_model(sess, 27500)
+		self.net.load_model(sess, 0)
 
 		######################################################################
 
-		for epi_no in range(100):
+		for epi_no in range(3000):
 			# print('Episode Number: %d' % epi_no)
 			total_qFuncCurrent = 0
 			
@@ -545,7 +659,7 @@ class DQN_Agent():
 					total_qFuncCurrent = total_qFuncCurrent + qFuncCurrent[0][currentAction[0]]
 					# print('Q per episode: %f' % total_qFuncCurrent)
 					print("episode: {}/{}, score: {}".format(epi_no, 100, iter_no))
-					steps_per_episode.append(iter_no)
+					steps_per_episode.append(-iter_no)
 					qFunc_per_episode.append(total_qFuncCurrent)
 					break
 
@@ -589,13 +703,15 @@ class DQN_Agent():
 		
 		writer.close()
 
-		print(np.sum(steps_per_episode)/100)
+		print(np.sum(steps_per_episode)/100 + 1.0)
+		print(np.std(steps_per_episode))
 
 		plt.figure(1)
 		plt.plot(steps_per_episode)
-		
-		plt.figure(2)
-		plt.plot(qFunc_per_episode)
+		plt.xlabel('No. of episodes')
+		plt.ylabel('Reward')
+		# plt.figure(2)
+		# plt.plot(qFunc_per_episode)
 
 		plt.show()
 
@@ -665,8 +781,9 @@ def main(args):
 	# W = tf.Variable(tf.random_uniform([4,2], 0, 0.01))
 	
 	agent = DQN_Agent(env, sess, render)
-	agent.train(sess)
-	# agent.test(sess)
+	# agent.train(sess)
+	agent.test(sess)
+	# agent.demo(sess)
 	writer.close()
 
 if __name__ == '__main__':
